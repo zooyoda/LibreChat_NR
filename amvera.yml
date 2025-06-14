@@ -1,19 +1,13 @@
 meta:
-  environment: nodejs
+  environment: node
   toolchain:
-    name: server
+    name: npm
     version: 20
 
-build:
-  buildCommand: "npm ci && npm run build"
-
 run:
-  startCommand: "npm start"
+  scriptName: server/index.js
   containerPort: 3080
-  persistenceMount: "/data"
   env:
     - MONGO_URI=mongodb://NeuralRunner:Copermine159753@amvera-neuralrunner-run-mongodb-nr:80/librechat
     - NODE_ENV=production
     - PORT=3080
-    - DOMAIN_CLIENT=https://nrlibre-neuralrunner.amvera.io
-    - DOMAIN_SERVER=https://nrlibre-neuralrunner.amvera.io
