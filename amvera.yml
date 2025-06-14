@@ -4,6 +4,9 @@ meta:
     name: npm
     version: 20
 
+build:
+  additionalCommands: npm run frontend
+
 run:
-  scriptName: server/index.js
+  command: npm run backend
   containerPort: 3080
