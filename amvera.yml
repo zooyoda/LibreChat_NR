@@ -1,10 +1,19 @@
 meta:
-  environment: node
+  environment: nodejs
   toolchain:
-    name: npm
-    version: 18
-  build:
-    additionalCommands: npm run build
-  run:
-    command: npm run start
-    containerPort: 3000
+    name: server
+    version: 20
+
+build:
+  buildCommand: "npm ci && npm run build"
+  outputDirectory: "client/dist"
+
+run:
+  startCommand: "npm start"
+  containerPort: "3080"
+  persistenceMount: "/data"
+  env:
+    - NODE_ENV=production
+    - PORT=3080
+    - DOMAIN_CLIENT=nrlibre-neuralrunner.amvera.io
+    - DOMAIN_SERVER=nrlibre-neuralrunner.amvera.io
