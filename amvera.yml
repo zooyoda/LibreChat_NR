@@ -6,15 +6,14 @@ meta:
 
 build:
   buildCommand: "npm ci && npm run build"
-  outputDirectory: "client/dist"
 
 run:
   startCommand: "npm start"
-  containerPort: "3080"
+  containerPort: 3080
   persistenceMount: "/data"
   env:
     - MONGO_URI=mongodb://NeuralRunner:Copermine159753@amvera-neuralrunner-run-mongodb-nr:80/librechat
     - NODE_ENV=production
     - PORT=3080
-    - DOMAIN_CLIENT=nrlibre-neuralrunner.amvera.io
-    - DOMAIN_SERVER=nrlibre-neuralrunner.amvera.io
+    - DOMAIN_CLIENT=https://nrlibre-neuralrunner.amvera.io
+    - DOMAIN_SERVER=https://nrlibre-neuralrunner.amvera.io
