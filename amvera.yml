@@ -13,6 +13,7 @@ run:
   containerPort: "3080"
   persistenceMount: "/data"
   env:
+    - MONGO_URI=mongodb://NeuralRunner:Copermine159753@amvera-neuralrunner-run-mongodb-nr:80/librechat
     - NODE_ENV=production
     - PORT=3080
     - DOMAIN_CLIENT=nrlibre-neuralrunner.amvera.io
