@@ -17,26 +17,17 @@ RUN uv --version
 RUN mkdir -p /app && chown node:node /app
 WORKDIR /app
 
-# Копируем только основные package.json файлы
-COPY package*.json ./
-COPY client/package*.json ./client/
-COPY api/package*.json ./api/
-# УБИРАЕМ эту строку: COPY packages/*/package*.json ./packages/*/
+# Переключаемся на пользователя node СРАЗУ
+USER node
 
-# Устанавливаем зависимости как root
+# Копируем исходный код
+COPY --chown=node:node . .
+
+# ОДНА установка npm как пользователь node
 RUN npm config set fetch-retry-maxtimeout 600000 && \
     npm config set fetch-retries 5 && \
     npm config set fetch-retry-mintimeout 15000 && \
     npm install --no-audit
-
-# Переключаемся на пользователя node
-USER node
-
-# Копируем исходный код (включая packages)
-COPY --chown=node:node . .
-
-# Устанавливаем зависимости после копирования всего кода
-RUN npm install --no-audit
 
 RUN \
     # Allow mounting of these files, which have no default
@@ -49,7 +40,7 @@ RUN \
 
 RUN mkdir -p /app/client/public/images /app/api/logs
 
-# Используем порт 3080
+# Используем порт 3080 (непривилегированный)
 EXPOSE 3080
 ENV HOST=0.0.0.0
 
