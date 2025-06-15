@@ -2,5 +2,5 @@ meta:
   environment: docker
 
 run:
-  containerPort: 80
+  containerPort: 3080
   servicePort: 80
