@@ -17,8 +17,22 @@ RUN uv --version
 RUN mkdir -p /app && chown node:node /app
 WORKDIR /app
 
+# ИСПРАВЛЕНИЕ: Копируем package.json файлы как root, затем переключаемся на user node
+COPY package*.json ./
+COPY client/package*.json ./client/
+COPY api/package*.json ./api/
+COPY packages/*/package*.json ./packages/*/
+
+# Устанавливаем зависимости как root для избежания проблем с правами доступа
+RUN npm config set fetch-retry-maxtimeout 600000 && \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 15000 && \
+    npm install --no-audit
+
+# Переключаемся на пользователя node
 USER node
 
+# Копируем исходный код
 COPY --chown=node:node . .
 
 RUN \
@@ -26,10 +40,6 @@ RUN \
     touch .env ; \
     # Create directories for the volumes to inherit the correct permissions
     mkdir -p /app/client/public/images /app/api/logs ; \
-    npm config set fetch-retry-maxtimeout 600000 ; \
-    npm config set fetch-retries 5 ; \
-    npm config set fetch-retry-mintimeout 15000 ; \
-    npm install --no-audit; \
     # React client build
     NODE_OPTIONS="--max-old-space-size=2048" npm run frontend; \
     npm cache clean --force
@@ -40,5 +50,5 @@ RUN mkdir -p /app/client/public/images /app/api/logs
 EXPOSE 3080
 ENV HOST=0.0.0.0
 
-# ИСПРАВЛЕНИЕ: Запускаем напрямую через node, а не через npm
+# Запускаем напрямую через node, а не через npm
 CMD ["node", "api/server/index.js"]
