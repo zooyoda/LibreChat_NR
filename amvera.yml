@@ -1,12 +1,7 @@
 meta:
-  environment: node
-  toolchain:
-    name: npm
-    version: 20
-
-build:
-  additionalCommands: npm run frontend
+  environment: docker
 
 run:
-  command: npm run backend
-  containerPort: 3080
+  containerPort: 80
+  servicePort: 80
+  dockerfile: Dockerfile.multi
