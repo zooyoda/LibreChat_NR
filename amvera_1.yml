@@ -4,4 +4,3 @@ meta:
 run:
   containerPort: 80
   servicePort: 80
-  dockerfile: Dockerfile.multi
