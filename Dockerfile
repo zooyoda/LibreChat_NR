@@ -7,8 +7,8 @@ COPY package*.json ./
 COPY client/package*.json ./client/
 COPY api/package*.json ./api/
 
-# Устанавливаем зависимости как root (избегаем проблем с правами доступа)
-RUN npm ci --only=production
+# ИСПРАВЛЕНИЕ: Устанавливаем ВСЕ зависимости (включая dev) для сборки
+RUN npm ci --include=dev
 
 # Копируем исходный код
 COPY . .
