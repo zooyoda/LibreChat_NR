@@ -1,54 +1,30 @@
-# v0.7.8
-
-# Base node image
-FROM node:20-alpine AS node
-
-# Install jemalloc
-RUN apk add --no-cache jemalloc
-RUN apk add --no-cache python3 py3-pip uv
-
-# Set environment variable to use jemalloc
-ENV LD_PRELOAD=/usr/lib/libjemalloc.so.2
-
-# Add `uv` for extended MCP support
-COPY --from=ghcr.io/astral-sh/uv:0.6.13 /uv /uvx /bin/
-RUN uv --version
-
-# Создаем пользователя и директории с правильными правами доступа
-RUN addgroup -g 1000 node && adduser -u 1000 -G node -s /bin/sh -D node || true
-RUN mkdir -p /app && chown -R node:node /app
+FROM node:20-alpine
 
 WORKDIR /app
 
-# ИСПРАВЛЕНИЕ: Очищаем npm cache и устанавливаем правильные права доступа
-RUN npm cache clean --force
-RUN chown -R node:node /home/node/.npm || mkdir -p /home/node/.npm && chown -R node:node /home/node/.npm
+# Копируем package.json файлы для кэширования слоев
+COPY package*.json ./
+COPY client/package*.json ./client/
+COPY api/package*.json ./api/
 
-# Переключаемся на пользователя node
-USER node
+# Устанавливаем зависимости как root (избегаем проблем с правами доступа)
+RUN npm ci --only=production
 
 # Копируем исходный код
-COPY --chown=node:node . .
+COPY . .
 
-# Устанавливаем зависимости с дополнительными флагами для избежания проблем с правами доступа
-RUN npm config set fetch-retry-maxtimeout 600000 && \
-    npm config set fetch-retries 5 && \
-    npm config set fetch-retry-mintimeout 15000 && \
-    npm config set cache /tmp/.npm && \
-    npm install --no-audit --prefer-offline --no-optional
+# Собираем фронтенд
+RUN npm run frontend
 
-RUN \
-    # Allow mounting of these files, which have no default
-    touch .env ; \
-    # Create directories for the volumes to inherit the correct permissions
-    mkdir -p /app/client/public/images /app/api/logs ; \
-    # React client build
-    NODE_OPTIONS="--max-old-space-size=2048" npm run frontend; \
-    npm cache clean --force
+# Создаем необходимые директории
+RUN mkdir -p /app/client/public/images /app/api/logs
 
-# Используем порт 3080 (непривилегированный)
+# Открываем порт 3080
 EXPOSE 3080
-ENV HOST=0.0.0.0
 
-# Запускаем напрямую через node
+# Устанавливаем переменные окружения
+ENV HOST=0.0.0.0
+ENV NODE_ENV=production
+
+# КРИТИЧЕСКИ ВАЖНО: Запускаем напрямую через node
 CMD ["node", "api/server/index.js"]
