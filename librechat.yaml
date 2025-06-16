@@ -1,7 +1,6 @@
 version: 1.2.8
 cache: true
 
-# Настройки интерфейса
 interface:
   endpointsMenu: true
   modelSelect: true
@@ -12,62 +11,40 @@ interface:
   bookmarks: true
   multiConvo: true
 
-# Настройки регистрации
 registration:
   socialLogins: ['github', 'google', 'discord']
 
-# Настройки действий
-actions:
-  allowedDomains:
-    - "swapi.dev"
-    - "librechat.ai"
-    - "google.com"
-
-# Эндпоинты
 endpoints:
-  # Предустановленные эндпоинты
   openAI:
     apiKey: "user_provided"
     models:
-      fetch: true  # Автоматически загружает ВСЕ доступные модели OpenAI
-      default: ["gpt-4o", "gpt-4", "gpt-3.5-turbo"]  # Модели по умолчанию, если fetch не сработает
+      fetch: true
     titleConvo: true
     titleModel: "gpt-3.5-turbo"
-    summarize: false
-    modelDisplayLabel: "OpenAI"
     
   anthropic:
     apiKey: "user_provided"
     models:
-      fetch: true  # Автоматически загружает все модели Anthropic
-      default: ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"]
+      fetch: true
     titleConvo: true
-    titleModel: "claude-3-haiku-20240307"
-    modelDisplayLabel: "Anthropic"
     
   google:
     apiKey: "user_provided"
     models:
-      fetch: true  # Автоматически загружает все модели Google
-      default: ["gemini-pro", "gemini-pro-vision"]
+      fetch: true
     titleConvo: true
-    titleModel: "gemini-pro"
-    modelDisplayLabel: "Google"
 
-  # Кастомные эндпоинты
   custom:
-    # Groq
     - name: "Groq"
       apiKey: "user_provided"
       baseURL: "https://api.groq.com/openai/v1/"
       models:
         fetch: true
-        default: ["llama3-70b-8192", "mixtral-8x7b-32768"]
+        default: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
       titleConvo: true
-      titleModel: "mixtral-8x7b-32768"
+      titleModel: "llama-3.1-8b-instant"
       modelDisplayLabel: "Groq"
 
-    # Mistral AI
     - name: "Mistral"
       apiKey: "user_provided"
       baseURL: "https://api.mistral.ai/v1"
@@ -79,30 +56,27 @@ endpoints:
       modelDisplayLabel: "Mistral"
       dropParams: ["stop", "user", "frequency_penalty", "presence_penalty"]
 
-    # OpenRouter
     - name: "OpenRouter"
       apiKey: "user_provided"
       baseURL: "https://openrouter.ai/api/v1"
       models:
-        fetch: true  # Загружает ВСЕ доступные модели OpenRouter
+        fetch: true
         default: ["meta-llama/llama-3-70b-instruct"]
       titleConvo: true
       titleModel: "meta-llama/llama-3-70b-instruct"
       dropParams: ["stop"]
       modelDisplayLabel: "OpenRouter"
 
-    # Cohere
     - name: "Cohere"
       apiKey: "user_provided"
       baseURL: "https://api.cohere.ai/v1"
       models:
         fetch: true
-        default: ["command-r-plus", "command-r"]
+        default: ["command-r-plus"]
       titleConvo: true
-      titleModel: "command-r"
+      titleModel: "command-r-plus"
       modelDisplayLabel: "Cohere"
 
-    # Perplexity
     - name: "Perplexity"
       apiKey: "user_provided"
       baseURL: "https://api.perplexity.ai"
