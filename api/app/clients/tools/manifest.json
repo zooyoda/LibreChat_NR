@@ -1,5 +1,32 @@
 [
   {
+  "wordpress_jwt_api": {
+    "name": "WordPress JWT API",
+    "pluginKey": "wordpress_jwt_api",
+    "description": "Comprehensive WordPress content management through REST API with JWT authentication. Supports posts, pages, categories, tags, media, users, and comments management.",
+    "icon": "https://s.w.org/style/images/about/WordPress-logotype-wmark.png",
+    "authConfig": [
+      {
+        "authField": "WORDPRESS_API_URL",
+        "label": "WordPress Site URL",
+        "description": "Your WordPress site URL (e.g., https://yoursite.com)"
+      },
+      {
+        "authField": "WORDPRESS_USERNAME", 
+        "label": "WordPress Username",
+        "description": "WordPress admin username for JWT authentication"
+      },
+      {
+        "authField": "WORDPRESS_PASSWORD",
+        "label": "WordPress Password", 
+        "description": "WordPress admin password for JWT authentication"
+      }
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
+  }
+},
+  {
     "name": "Traversaal",
     "pluginKey": "traversaal_search",
     "description": "Traversaal is a robust search API tailored for LLM Agents. Get an API key here: https://api.traversaal.ai",
