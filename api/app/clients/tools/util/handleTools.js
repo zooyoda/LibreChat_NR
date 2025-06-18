@@ -1,5 +1,6 @@
 const { SerpAPI } = require('@langchain/community/tools/serpapi');
 const { Calculator } = require('@langchain/community/tools/calculator');
+const { WordPressJWTAPI } = require('../');
 const { EnvVar, createCodeExecutionTool, createSearchTool } = require('@librechat/agents');
 const {
   Tools,
