@@ -159,6 +159,7 @@ const loadTools = async ({
     'azure-ai-search': StructuredACS,
     traversaal_search: TraversaalSearch,
     tavily_search_results_json: TavilySearchResults,
+    wordpress_jwt_api: WordPressJWTAPI,
   };
 
   const customConstructors = {
