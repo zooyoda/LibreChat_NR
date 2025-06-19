@@ -4,7 +4,3 @@ services:
   api:
     environment:
       - CONFIG_PATH=https://raw.githubusercontent.com/LibreChat-AI/librechat-config-yaml/main/librechat-env-l.yaml
-       volumes:
-      - ./assets:/app/client/public/assets
-      - ./client/index.html:/app/client/index.html
-      - ./client/public/manifest.webmanifest:/app/client/public/manifest.webmanifest
