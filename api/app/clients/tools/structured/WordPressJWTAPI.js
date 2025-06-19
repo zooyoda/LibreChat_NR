@@ -1,11 +1,13 @@
 const { Tool } = require('langchain/tools');
 const axios = require('axios');
+const https = require('https');
+const http = require('http');
 
 class WordPressJWTAPI extends Tool {
   constructor(fields = {}) {
     super();
     this.name = 'wordpress_jwt_api';
-    this.description = `WordPress REST API tool with JWT authentication for comprehensive content management. Can create, read, update, and delete posts, pages, categories, tags, media, users, and manage site settings. Automatically handles JWT token refresh. Requires WordPress site URL, username, and password.`;
+    this.description = `WordPress REST API tool with JWT authentication for comprehensive content management. Can create, read, update, and delete posts, pages, categories, tags, media, users, and comments. Automatically handles JWT token refresh. Requires WordPress site URL, username, and password.`;
     
     this.apiUrl = fields.WORDPRESS_API_URL || this.getEnvVariable('WORDPRESS_API_URL');
     this.username = fields.WORDPRESS_USERNAME || this.getEnvVariable('WORDPRESS_USERNAME');
@@ -22,6 +24,8 @@ class WordPressJWTAPI extends Tool {
     this.jwtToken = null;
     this.tokenExpiry = null;
     this.refreshThreshold = 60000; // Обновляем токен за 1 минуту до истечения
+    
+    console.log('WordPress JWT API initialized with URL:', this.apiUrl);
   }
 
   getEnvVariable(name) {
@@ -36,15 +40,29 @@ class WordPressJWTAPI extends Tool {
     }
 
     try {
-      console.log('Получение нового JWT токена...');
+      console.log('Получение нового JWT токена для:', this.apiUrl);
+      
       const response = await axios.post(`${this.apiUrl}/wp-json/jwt-auth/v1/token`, {
         username: this.username,
         password: this.password
       }, {
-        timeout: 10000,
+        timeout: 30000,
         headers: {
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          'User-Agent': 'LibreChat-WordPress-API/1.0',
+          'Accept': 'application/json'
+        },
+        // Настройки для HTTPS
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false, // Временно для тестирования
+          keepAlive: true,
+          timeout: 30000
+        }),
+        // Настройки для HTTP
+        httpAgent: new http.Agent({
+          keepAlive: true,
+          timeout: 30000
+        })
       });
 
       this.jwtToken = response.data.token;
@@ -66,9 +84,17 @@ class WordPressJWTAPI extends Tool {
       await axios.post(`${this.apiUrl}/wp-json/jwt-auth/v1/token/validate`, {}, {
         headers: {
           'Authorization': `Bearer ${this.jwtToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'User-Agent': 'LibreChat-WordPress-API/1.0'
         },
-        timeout: 5000
+        timeout: 10000,
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false,
+          keepAlive: true
+        }),
+        httpAgent: new http.Agent({
+          keepAlive: true
+        })
       });
       return true;
     } catch (error) {
@@ -110,22 +136,22 @@ class WordPressJWTAPI extends Tool {
     
     // Определяем действие
     let action = 'GET';
-    if (lowerInput.includes('создай') || lowerInput.includes('добавь') || lowerInput.includes('новый')) {
+    if (lowerInput.includes('создай') || lowerInput.includes('добавь') || lowerInput.includes('новый') || lowerInput.includes('create')) {
       action = 'POST';
-    } else if (lowerInput.includes('обнови') || lowerInput.includes('измени') || lowerInput.includes('редактируй')) {
+    } else if (lowerInput.includes('обнови') || lowerInput.includes('измени') || lowerInput.includes('редактируй') || lowerInput.includes('update')) {
       action = 'PUT';
-    } else if (lowerInput.includes('удали') || lowerInput.includes('убери')) {
+    } else if (lowerInput.includes('удали') || lowerInput.includes('убери') || lowerInput.includes('delete')) {
       action = 'DELETE';
     }
     
     // Определяем endpoint
     let endpoint = '/posts';
-    if (lowerInput.includes('страниц')) endpoint = '/pages';
-    else if (lowerInput.includes('категор')) endpoint = '/categories';
-    else if (lowerInput.includes('тег') || lowerInput.includes('метк')) endpoint = '/tags';
-    else if (lowerInput.includes('пользовател')) endpoint = '/users';
-    else if (lowerInput.includes('медиа') || lowerInput.includes('изображен') || lowerInput.includes('файл')) endpoint = '/media';
-    else if (lowerInput.includes('комментар')) endpoint = '/comments';
+    if (lowerInput.includes('страниц') || lowerInput.includes('page')) endpoint = '/pages';
+    else if (lowerInput.includes('категор') || lowerInput.includes('categor')) endpoint = '/categories';
+    else if (lowerInput.includes('тег') || lowerInput.includes('метк') || lowerInput.includes('tag')) endpoint = '/tags';
+    else if (lowerInput.includes('пользовател') || lowerInput.includes('user')) endpoint = '/users';
+    else if (lowerInput.includes('медиа') || lowerInput.includes('изображен') || lowerInput.includes('файл') || lowerInput.includes('media')) endpoint = '/media';
+    else if (lowerInput.includes('комментар') || lowerInput.includes('comment')) endpoint = '/comments';
     
     // Извлекаем ID если есть
     const idMatch = input.match(/id[:\s]*(\d+)/i);
@@ -154,10 +180,23 @@ class WordPressJWTAPI extends Tool {
       url,
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'User-Agent': 'LibreChat-WordPress-API/1.0',
+        'Accept': 'application/json'
       },
       params,
-      timeout: 15000
+      timeout: 30000,
+      // Настройки для HTTPS
+      httpsAgent: new https.Agent({
+        rejectUnauthorized: false, // Временно для тестирования
+        keepAlive: true,
+        timeout: 30000
+      }),
+      // Настройки для HTTP  
+      httpAgent: new http.Agent({
+        keepAlive: true,
+        timeout: 30000
+      })
     };
     
     if (method !== 'GET' && method !== 'DELETE' && Object.keys(data).length > 0) {
@@ -165,11 +204,13 @@ class WordPressJWTAPI extends Tool {
     }
     
     try {
+      console.log(`Выполняется ${method} запрос к: ${url}`);
       const response = await axios(config);
       return this.formatResponse(response.data, method, endpoint, id);
     } catch (error) {
       if (error.response?.status === 401) {
         // Токен истек, пытаемся получить новый
+        console.log('Токен истек, получаем новый...');
         this.jwtToken = null;
         this.tokenExpiry = null;
         
@@ -184,8 +225,11 @@ class WordPressJWTAPI extends Tool {
       }
       
       if (error.response) {
+        console.error(`WordPress API ошибка: ${error.response.status}`, error.response.data);
         return `WordPress API Ошибка: ${error.response.status} - ${error.response.data?.message || error.response.statusText}`;
       }
+      
+      console.error('Сетевая ошибка:', error.message);
       return `Сетевая ошибка: ${error.message}`;
     }
   }
@@ -193,27 +237,36 @@ class WordPressJWTAPI extends Tool {
   formatResponse(data, method, endpoint, id) {
     if (Array.isArray(data)) {
       const itemType = this.getItemType(endpoint);
-      return `Найдено ${data.length} ${itemType}. Вот детали:\n${JSON.stringify(data.slice(0, 3), null, 2)}${data.length > 3 ? '\n... и еще ' + (data.length - 3) : ''}`;
+      const items = data.slice(0, 5).map(item => ({
+        id: item.id,
+        title: item.title?.rendered || item.name || 'Без названия',
+        status: item.status || 'неизвестен',
+        date: item.date || item.date_gmt || 'неизвестна'
+      }));
+      
+      return `Найдено ${data.length} ${itemType}. Показываю первые ${Math.min(data.length, 5)}:\n\n${items.map(item => 
+        `ID: ${item.id}\nНазвание: ${item.title}\nСтатус: ${item.status}\nДата: ${item.date}\n`
+      ).join('\n')}${data.length > 5 ? `\n... и еще ${data.length - 5}` : ''}`;
     }
     
     if (method === 'POST') {
       const itemType = this.getItemType(endpoint);
-      return `Успешно создан новый ${itemType} с ID: ${data.id}.\nЗаголовок: ${data.title?.rendered || data.name || 'Без заголовка'}\nСтатус: ${data.status || 'неизвестен'}`;
+      return `✅ Успешно создан новый ${itemType}!\nID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nСсылка: ${data.link || 'недоступна'}`;
     }
     
     if (method === 'PUT') {
       const itemType = this.getItemType(endpoint);
-      return `Успешно обновлен ${itemType} с ID: ${data.id}.\nЗаголовок: ${data.title?.rendered || data.name || 'Без заголовка'}\nСтатус: ${data.status || 'неизвестен'}`;
+      return `✅ Успешно обновлен ${itemType}!\nID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nПоследнее изменение: ${data.modified || 'неизвестно'}`;
     }
     
     if (method === 'DELETE') {
-      return `Элемент успешно удален.`;
+      return `✅ Элемент успешно удален.`;
     }
     
     // Для GET запроса одного элемента
     if (data.id) {
       const itemType = this.getItemType(endpoint);
-      return `${itemType} ID: ${data.id}\nЗаголовок: ${data.title?.rendered || data.name || 'Без заголовка'}\nСтатус: ${data.status || 'неизвестен'}\nДата: ${data.date || 'неизвестна'}`;
+      return `${itemType} ID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nДата создания: ${data.date || 'неизвестна'}\nПоследнее изменение: ${data.modified || 'неизвестно'}\nСсылка: ${data.link || 'недоступна'}`;
     }
     
     return JSON.stringify(data, null, 2);
