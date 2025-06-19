@@ -1,6 +1,5 @@
 [
   {
-  "wordpress_jwt_api": {
     "name": "WordPress JWT API",
     "pluginKey": "wordpress_jwt_api",
     "description": "Comprehensive WordPress content management through REST API with JWT authentication. Supports posts, pages, categories, tags, media, users, and comments management.",
@@ -12,16 +11,25 @@
         "description": "Your WordPress site URL (e.g., https://yoursite.com)"
       },
       {
-        "authField": "WORDPRESS_USERNAME", 
+        "authField": "WORDPRESS_USERNAME",
         "label": "WordPress Username",
         "description": "WordPress admin username for JWT authentication"
       },
       {
         "authField": "WORDPRESS_PASSWORD",
-        "label": "WordPress Password", 
+        "label": "WordPress Password",
         "description": "WordPress admin password for JWT authentication"
       }
     ],
+    "authenticated": true,
+    "isAuthRequired": true
+  },
+  {
+    "name": "Traversaal",
+    "pluginKey": "traversaal_search",
+    // ... остальные инструменты
+  }
+],
     "authenticated": true,
     "isAuthRequired": true
   }
