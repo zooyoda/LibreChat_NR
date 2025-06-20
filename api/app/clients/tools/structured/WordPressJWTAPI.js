@@ -200,21 +200,6 @@ class WordPressJWTAPI extends Tool {
         }
       }
       
-      // Специфичные поля для страниц
-      if (endpoint === '/pages') {
-        // Родительская страница
-        const parentMatch = input.match(/parent=(\d+)/i);
-        if (parentMatch) {
-          data.parent = parseInt(parentMatch[1]);
-        }
-        
-        // Шаблон страницы
-        const templateMatch = input.match(/template=([^&]+)/i);
-        if (templateMatch) {
-          data.template = templateMatch[1];
-        }
-      }
-      
       // Специфичные поля для категорий
       if (endpoint === '/categories') {
         const nameMatch = input.match(/name=([^&]+)/i);
@@ -253,29 +238,6 @@ class WordPressJWTAPI extends Tool {
         const slugMatch = input.match(/slug=([^&]+)/i);
         if (slugMatch) {
           data.slug = slugMatch[1];
-        }
-      }
-      
-      // Специфичные поля для пользователей
-      if (endpoint === '/users') {
-        const usernameMatch = input.match(/username=([^&]+)/i);
-        if (usernameMatch) {
-          data.username = usernameMatch[1];
-        }
-        
-        const emailMatch = input.match(/email=([^&]+)/i);
-        if (emailMatch) {
-          data.email = emailMatch[1];
-        }
-        
-        const passwordMatch = input.match(/password=([^&]+)/i);
-        if (passwordMatch) {
-          data.password = passwordMatch[1];
-        }
-        
-        const roleMatch = input.match(/role=([^&]+)/i);
-        if (roleMatch) {
-          data.roles = [roleMatch[1]];
         }
       }
     }
@@ -332,7 +294,9 @@ class WordPressJWTAPI extends Tool {
     
     try {
       console.log(`Выполняется ${method} запрос к: ${url}`);
-      console.log('Данные запроса:', JSON.stringify(data, null, 2));
+      if (Object.keys(data).length > 0) {
+        console.log('Данные запроса:', JSON.stringify(data, null, 2));
+      }
       const response = await axios(config);
       return this.formatResponse(response.data, method, endpoint, id);
     } catch (error) {
@@ -466,11 +430,6 @@ class WordPressJWTAPI extends Tool {
 
   async getUsers() {
     return this.makeRequest('GET', '/users');
-  }
-
-  async createUser(username, email, password, roles = ['subscriber']) {
-    const data = { username, email, password, roles };
-    return this.makeRequest('POST', '/users', data);
   }
 
   async getMedia(params = {}) {
