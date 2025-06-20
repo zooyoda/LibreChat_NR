@@ -153,6 +153,133 @@ class WordPressJWTAPI extends Tool {
     else if (lowerInput.includes('медиа') || lowerInput.includes('изображен') || lowerInput.includes('файл') || lowerInput.includes('media')) endpoint = '/media';
     else if (lowerInput.includes('комментар') || lowerInput.includes('comment')) endpoint = '/comments';
     
+    // Извлекаем данные для создания контента
+    let data = {};
+    
+    if (action === 'POST') {
+      // Общие поля для всех типов контента
+      const titleMatch = input.match(/title=([^&]+)/i);
+      if (titleMatch) {
+        data.title = decodeURIComponent(titleMatch[1].replace(/\+/g, ' '));
+      }
+      
+      const contentMatch = input.match(/content=([^&]+)/i);
+      if (contentMatch) {
+        data.content = decodeURIComponent(contentMatch[1].replace(/\+/g, ' '));
+      }
+      
+      const statusMatch = input.match(/status=([^&]+)/i);
+      if (statusMatch) {
+        data.status = statusMatch[1];
+      }
+      
+      // Специфичные поля для постов
+      if (endpoint === '/posts') {
+        // Категории для постов
+        const categoryMatch = input.match(/category=(\d+)/i);
+        if (categoryMatch) {
+          data.categories = [parseInt(categoryMatch[1])];
+        }
+        
+        // Теги для постов
+        const tagMatch = input.match(/tag=(\d+)/i);
+        if (tagMatch) {
+          data.tags = [parseInt(tagMatch[1])];
+        }
+        
+        // Множественные категории
+        const categoriesMatch = input.match(/categories=(\d+(?:,\d+)*)/i);
+        if (categoriesMatch) {
+          data.categories = categoriesMatch[1].split(',').map(id => parseInt(id.trim()));
+        }
+        
+        // Множественные теги
+        const tagsMatch = input.match(/tags=(\d+(?:,\d+)*)/i);
+        if (tagsMatch) {
+          data.tags = tagsMatch[1].split(',').map(id => parseInt(id.trim()));
+        }
+      }
+      
+      // Специфичные поля для страниц
+      if (endpoint === '/pages') {
+        // Родительская страница
+        const parentMatch = input.match(/parent=(\d+)/i);
+        if (parentMatch) {
+          data.parent = parseInt(parentMatch[1]);
+        }
+        
+        // Шаблон страницы
+        const templateMatch = input.match(/template=([^&]+)/i);
+        if (templateMatch) {
+          data.template = templateMatch[1];
+        }
+      }
+      
+      // Специфичные поля для категорий
+      if (endpoint === '/categories') {
+        const nameMatch = input.match(/name=([^&]+)/i);
+        if (nameMatch) {
+          data.name = decodeURIComponent(nameMatch[1].replace(/\+/g, ' '));
+        }
+        
+        const descriptionMatch = input.match(/description=([^&]+)/i);
+        if (descriptionMatch) {
+          data.description = decodeURIComponent(descriptionMatch[1].replace(/\+/g, ' '));
+        }
+        
+        const slugMatch = input.match(/slug=([^&]+)/i);
+        if (slugMatch) {
+          data.slug = slugMatch[1];
+        }
+        
+        const parentCatMatch = input.match(/parent=(\d+)/i);
+        if (parentCatMatch) {
+          data.parent = parseInt(parentCatMatch[1]);
+        }
+      }
+      
+      // Специфичные поля для тегов
+      if (endpoint === '/tags') {
+        const nameMatch = input.match(/name=([^&]+)/i);
+        if (nameMatch) {
+          data.name = decodeURIComponent(nameMatch[1].replace(/\+/g, ' '));
+        }
+        
+        const descriptionMatch = input.match(/description=([^&]+)/i);
+        if (descriptionMatch) {
+          data.description = decodeURIComponent(descriptionMatch[1].replace(/\+/g, ' '));
+        }
+        
+        const slugMatch = input.match(/slug=([^&]+)/i);
+        if (slugMatch) {
+          data.slug = slugMatch[1];
+        }
+      }
+      
+      // Специфичные поля для пользователей
+      if (endpoint === '/users') {
+        const usernameMatch = input.match(/username=([^&]+)/i);
+        if (usernameMatch) {
+          data.username = usernameMatch[1];
+        }
+        
+        const emailMatch = input.match(/email=([^&]+)/i);
+        if (emailMatch) {
+          data.email = emailMatch[1];
+        }
+        
+        const passwordMatch = input.match(/password=([^&]+)/i);
+        if (passwordMatch) {
+          data.password = passwordMatch[1];
+        }
+        
+        const roleMatch = input.match(/role=([^&]+)/i);
+        if (roleMatch) {
+          data.roles = [roleMatch[1]];
+        }
+      }
+    }
+    
     // Извлекаем ID если есть
     const idMatch = input.match(/id[:\s]*(\d+)/i);
     const id = idMatch ? idMatch[1] : null;
@@ -160,7 +287,7 @@ class WordPressJWTAPI extends Tool {
     return { 
       action, 
       endpoint, 
-      data: {}, 
+      data, 
       params: {},
       id 
     };
@@ -205,6 +332,7 @@ class WordPressJWTAPI extends Tool {
     
     try {
       console.log(`Выполняется ${method} запрос к: ${url}`);
+      console.log('Данные запроса:', JSON.stringify(data, null, 2));
       const response = await axios(config);
       return this.formatResponse(response.data, method, endpoint, id);
     } catch (error) {
@@ -290,9 +418,10 @@ class WordPressJWTAPI extends Tool {
     return this.makeRequest('GET', '/posts', {}, params);
   }
 
-  async createPost(title, content, status = 'draft', categories = []) {
+  async createPost(title, content, status = 'draft', categories = [], tags = []) {
     const data = { title, content, status };
     if (categories.length > 0) data.categories = categories;
+    if (tags.length > 0) data.tags = tags;
     return this.makeRequest('POST', '/posts', data);
   }
 
@@ -308,17 +437,20 @@ class WordPressJWTAPI extends Tool {
     return this.makeRequest('GET', '/pages', {}, params);
   }
 
-  async createPage(title, content, status = 'draft') {
-    return this.makeRequest('POST', '/pages', { title, content, status });
+  async createPage(title, content, status = 'draft', parent = null) {
+    const data = { title, content, status };
+    if (parent) data.parent = parent;
+    return this.makeRequest('POST', '/pages', data);
   }
 
   async getCategories() {
     return this.makeRequest('GET', '/categories');
   }
 
-  async createCategory(name, description = '', slug = '') {
+  async createCategory(name, description = '', slug = '', parent = null) {
     const data = { name, description };
     if (slug) data.slug = slug;
+    if (parent) data.parent = parent;
     return this.makeRequest('POST', '/categories', data);
   }
 
@@ -334,6 +466,11 @@ class WordPressJWTAPI extends Tool {
 
   async getUsers() {
     return this.makeRequest('GET', '/users');
+  }
+
+  async createUser(username, email, password, roles = ['subscriber']) {
+    const data = { username, email, password, roles };
+    return this.makeRequest('POST', '/users', data);
   }
 
   async getMedia(params = {}) {
