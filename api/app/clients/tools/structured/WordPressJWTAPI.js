@@ -8,7 +8,7 @@ class WordPressJWTAPI extends Tool {
     super();
     
     this.name = 'wordpress_jwt_api';
-    this.description = `WordPress REST API tool with JWT authentication for comprehensive content management. Can create, read, update, and delete posts, pages, categories, tags, media, users, and comments. Automatically handles JWT token refresh.
+    this.description = `WordPress REST API tool with JWT authentication for comprehensive content management. Can create, read, update, and delete posts, pages, categories, tags, media, users, and comments. Automatically handles JWT token refresh and provides detailed capability diagnostics.
 
 Available operations:
 - Posts: get_posts, create_post, update_post, delete_post
@@ -18,7 +18,7 @@ Available operations:
 - Comments: get_comments, create_comment, update_comment, delete_comment
 - Media: get_media, upload_media
 - Users: get_users, get_current_user
-- Search: search_content
+- Diagnostics: test_capabilities, check_user_capabilities
 
 Input format: JSON string with action, endpoint, data, params, and id fields, or natural language description.`;
 
@@ -45,6 +45,7 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     this.tokenExpiry = null;
     this.refreshThreshold = 60000;
     this.isConfigured = true;
+    this.userCapabilities = null; // Кэш для capabilities
 
     console.log('WordPress JWT API успешно инициализирован с URL:', this.apiUrl);
   }
@@ -61,6 +62,16 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
 
       const parsedInput = this.parseInput(input);
       const { action, endpoint, data, params, id } = parsedInput;
+      
+      // Специальные команды диагностики
+      if (action.toLowerCase() === 'test_capabilities') {
+        return await this.testCapabilities();
+      }
+      
+      if (action.toLowerCase() === 'check_user_capabilities') {
+        return await this.checkUserCapabilities();
+      }
+      
       return await this.makeRequest(action, endpoint, data, params, id);
     } catch (error) {
       return `Ошибка: ${error.message}`;
@@ -84,6 +95,15 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
 
   parseTextInput(input) {
     const lowerInput = input.toLowerCase();
+    
+    // Проверяем специальные команды
+    if (lowerInput.includes('диагностика') || lowerInput.includes('тест') || lowerInput.includes('test_capabilities')) {
+      return { action: 'test_capabilities', endpoint: '', data: {}, params: {}, id: null };
+    }
+    
+    if (lowerInput.includes('права') || lowerInput.includes('capabilities')) {
+      return { action: 'check_user_capabilities', endpoint: '', data: {}, params: {}, id: null };
+    }
     
     let action = 'GET';
     if (lowerInput.includes('создай') || lowerInput.includes('добавь') || lowerInput.includes('новый') || lowerInput.includes('create')) {
@@ -161,10 +181,130 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       console.error('Ошибка получения JWT токена:', error.response?.data || error.message);
       
       if (error.response?.status === 403) {
-        throw new Error(`Ошибка авторизации: неверные учетные данные для пользователя ${this.username}`);
+        throw new Error(`Ошибка авторизации: неверные учетные данные для пользователя ${this.username}. Проверьте Application Password.`);
       }
       
       throw new Error(`Не удалось получить JWT токен: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  async checkUserCapabilities() {
+    try {
+      const token = await this.getJWTToken();
+      
+      console.log('=== ПРОВЕРКА ПРАВ ПОЛЬЗОВАТЕЛЯ ===');
+      
+      // Получаем информацию о текущем пользователе
+      const response = await axios.get(`${this.apiUrl}/wp-json/wp/v2/users/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000,
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false,
+          keepAlive: true
+        }),
+        httpAgent: new http.Agent({
+          keepAlive: true
+        })
+      });
+      
+      const userData = response.data;
+      this.userCapabilities = userData.capabilities || {};
+      
+      console.log('Текущий пользователь:', userData.name);
+      console.log('ID пользователя:', userData.id);
+      console.log('Роли:', userData.roles);
+      
+      // Проверяем ключевые права для REST API
+      const requiredCaps = {
+        'publish_posts': 'Публикация постов',
+        'edit_posts': 'Редактирование постов',
+        'edit_others_posts': 'Редактирование чужих постов',
+        'delete_posts': 'Удаление постов',
+        'manage_categories': 'Управление категориями',
+        'upload_files': 'Загрузка файлов',
+        'read': 'Чтение контента'
+      };
+      
+      const capabilityReport = [];
+      const missingCaps = [];
+      
+      for (const [cap, description] of Object.entries(requiredCaps)) {
+        const hasCap = this.userCapabilities[cap] === true;
+        capabilityReport.push(`${hasCap ? '✅' : '❌'} ${description} (${cap}): ${hasCap ? 'ЕСТЬ' : 'НЕТ'}`);
+        
+        if (!hasCap) {
+          missingCaps.push(cap);
+        }
+      }
+      
+      console.log('Проверка capabilities:');
+      capabilityReport.forEach(line => console.log(line));
+      
+      if (missingCaps.length > 0) {
+        console.error('❌ Отсутствующие критические права:', missingCaps);
+        return `❌ ПРОБЛЕМА С ПРАВАМИ ДОСТУПА\n\nПользователь: ${userData.name}\nРоли: ${userData.roles.join(', ')}\n\nОтсутствующие права:\n${missingCaps.map(cap => `- ${requiredCaps[cap]} (${cap})`).join('\n')}\n\n🔧 РЕШЕНИЕ: Назначьте пользователю роль Administrator или Editor в WordPress админке.`;
+      }
+      
+      return `✅ ПРАВА ДОСТУПА В ПОРЯДКЕ\n\nПользователь: ${userData.name}\nРоли: ${userData.roles.join(', ')}\n\nВсе необходимые права присутствуют:\n${capabilityReport.join('\n')}`;
+      
+    } catch (error) {
+      console.error('Ошибка проверки прав:', error.response?.data || error.message);
+      
+      if (error.response?.status === 403) {
+        return `❌ ОШИБКА ДОСТУПА: Не удается получить информацию о пользователе. Проверьте права доступа к /wp-json/wp/v2/users/me`;
+      }
+      
+      return `❌ Ошибка проверки прав: ${error.response?.data?.message || error.message}`;
+    }
+  }
+
+  async testCapabilities() {
+    console.log('=== ПОЛНАЯ ДИАГНОСТИКА WORDPRESS JWT API ===');
+    
+    const results = [];
+    
+    try {
+      // 1. Проверяем получение токена
+      results.push('🔍 Тестирование получения JWT токена...');
+      const token = await this.getJWTToken();
+      results.push('✅ JWT токен получен успешно');
+      
+      // 2. Проверяем права пользователя
+      results.push('\n🔍 Проверка прав пользователя...');
+      const capResult = await this.checkUserCapabilities();
+      results.push(capResult);
+      
+      // 3. Тестируем GET запрос
+      results.push('\n🔍 Тестирование GET запроса...');
+      const getPosts = await this.makeRequest('GET', '/posts', {}, { per_page: 1 });
+      results.push('✅ GET запрос работает');
+      
+      // 4. Тестируем создание черновика (если есть права)
+      if (this.userCapabilities && this.userCapabilities['edit_posts']) {
+        results.push('\n🔍 Тестирование создания черновика...');
+        try {
+          const testPost = await this.makeRequest('POST', '/posts', {
+            title: 'Тестовый пост от LibreChat',
+            content: 'Этот пост создан для тестирования API. Можно удалить.',
+            status: 'draft'
+          });
+          results.push('✅ Создание черновика работает');
+        } catch (createError) {
+          results.push(`❌ Ошибка создания поста: ${createError.message}`);
+        }
+      } else {
+        results.push('\n⚠️ Пропуск теста создания - нет прав edit_posts');
+      }
+      
+      results.push('\n=== ДИАГНОСТИКА ЗАВЕРШЕНА ===');
+      return results.join('\n');
+      
+    } catch (error) {
+      results.push(`❌ Критическая ошибка диагностики: ${error.message}`);
+      return results.join('\n');
     }
   }
 
@@ -173,17 +313,17 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       throw new Error(this.configError);
     }
 
+    // Для операций записи проверяем права заранее
+    if ((method === 'POST' || method === 'PUT' || method === 'DELETE') && !this.userCapabilities) {
+      console.log('Проверка прав перед операцией записи...');
+      await this.checkUserCapabilities();
+    }
+
     const token = await this.getJWTToken();
     
     let url = `${this.apiUrl}/wp-json/wp/v2${endpoint}`;
     if (id) {
       url += `/${id}`;
-    }
-
-    // Специальная обработка для PUT запросов
-    if (method === 'PUT' && !id && endpoint.includes('/')) {
-      // URL уже содержит ID в endpoint
-      url = `${this.apiUrl}/wp-json/wp/v2${endpoint}`;
     }
 
     const config = {
@@ -240,24 +380,64 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
         }
       }
 
-      if (error.response) {
+      if (error.response?.status === 403) {
         const errorData = error.response.data;
         
-        if (error.response.status === 403) {
-          if (errorData.code === 'rest_cannot_create') {
-            return `Ошибка прав доступа: Пользователь ${this.username} не имеет права на создание контента. Проверьте роль пользователя в WordPress.`;
-          }
-          return `Ошибка доступа (403): ${errorData.message || 'Недостаточно прав'}`;
+        if (errorData.code === 'rest_cannot_create') {
+          return `❌ ОШИБКА ПРАВ ДОСТУПА: Пользователь "${this.username}" не может создавать контент.
+
+🔧 ПРОВЕРЬТЕ:
+1. Роль пользователя в WordPress (должна быть Administrator/Editor)
+2. Application Password активен и корректен
+3. JWT плагин настроен правильно
+
+💡 Запустите диагностику: "test_capabilities"`;
         }
         
-        if (error.response.status === 404) {
-          return `Ошибка маршрута (404): Эндпоинт ${endpoint} не найден или метод ${method} не поддерживается.`;
+        if (errorData.code === 'rest_forbidden') {
+          return `❌ Доступ запрещен: ${errorData.message}
+
+🔧 Возможные причины:
+- Недостаточно прав для операции ${method} ${endpoint}
+- Пользователь не может редактировать этот контент
+- Проблемы с настройками WordPress`;
         }
         
-        return `WordPress API Ошибка: ${error.response.status} - ${errorData.message || error.response.statusText}`;
+        if (errorData.code === 'rest_cannot_edit') {
+          return `❌ Нельзя редактировать: ${errorData.message}
+
+🔧 Проверьте права пользователя на редактирование этого типа контента.`;
+        }
+        
+        return `❌ Ошибка 403: ${errorData.message || 'Недостаточно прав'}
+
+Код ошибки: ${errorData.code || 'неизвестен'}
+Запустите "test_capabilities" для диагностики.`;
+      }
+      
+      if (error.response?.status === 404) {
+        return `❌ Ошибка 404: Эндпоинт ${endpoint} не найден или метод ${method} не поддерживается.
+
+🔧 Проверьте:
+- Правильность URL эндпоинта
+- Поддержку метода ${method} для ${endpoint}
+- Активность WordPress REST API`;
+      }
+      
+      if (error.response) {
+        const errorData = error.response.data;
+        return `❌ WordPress API Ошибка ${error.response.status}: ${errorData.message || error.response.statusText}
+
+Код: ${errorData.code || 'неизвестен'}
+Данные: ${JSON.stringify(errorData.data || {}, null, 2)}`;
       }
 
-      return `Сетевая ошибка: ${error.message}`;
+      return `❌ Сетевая ошибка: ${error.message}
+
+🔧 Проверьте:
+- Доступность сайта ${this.apiUrl}
+- Интернет соединение
+- Настройки файрвола`;
     }
   }
 
