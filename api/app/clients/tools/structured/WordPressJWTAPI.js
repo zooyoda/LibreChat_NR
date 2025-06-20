@@ -22,12 +22,42 @@ Available operations:
 
 Input format: JSON string with action, endpoint, data, params, and id fields, or natural language description.`;
 
-    this.apiUrl = fields.WORDPRESS_API_URL || this.getEnvVariable('WORDPRESS_API_URL');
-    this.username = fields.WORDPRESS_USERNAME || this.getEnvVariable('WORDPRESS_USERNAME');
-    this.password = fields.WORDPRESS_PASSWORD || this.getEnvVariable('WORDPRESS_PASSWORD');
+    // Приоритет: сначала fields (от пользователя), потом переменные окружения
+    this.apiUrl = fields.WORDPRESS_API_URL || 
+                  fields.wordpress_api_url || 
+                  this.getEnvVariable('WORDPRESS_API_URL') || 
+                  this.getEnvVariable('WORDPRESS_URL');
+                  
+    this.username = fields.WORDPRESS_USERNAME || 
+                    fields.wordpress_username || 
+                    this.getEnvVariable('WORDPRESS_USERNAME') || 
+                    this.getEnvVariable('WORDPRESS_USER');
+                    
+    this.password = fields.WORDPRESS_PASSWORD || 
+                    fields.wordpress_password || 
+                    this.getEnvVariable('WORDPRESS_PASSWORD') || 
+                    this.getEnvVariable('WORDPRESS_PASS');
 
+    // Логирование для отладки
+    console.log('WordPress JWT API инициализация:');
+    console.log('- fields:', Object.keys(fields));
+    console.log('- apiUrl:', this.apiUrl ? 'установлен' : 'НЕ УСТАНОВЛЕН');
+    console.log('- username:', this.username ? 'установлен' : 'НЕ УСТАНОВЛЕН');
+    console.log('- password:', this.password ? 'установлен' : 'НЕ УСТАНОВЛЕН');
+
+    // Проверяем наличие всех необходимых данных
     if (!this.apiUrl || !this.username || !this.password) {
-      throw new Error('WordPress API URL, username, and password are required');
+      const missingFields = [];
+      if (!this.apiUrl) missingFields.push('WORDPRESS_API_URL');
+      if (!this.username) missingFields.push('WORDPRESS_USERNAME');
+      if (!this.password) missingFields.push('WORDPRESS_PASSWORD');
+      
+      console.error('Отсутствуют обязательные поля:', missingFields);
+      
+      // Не выбрасываем ошибку, а устанавливаем флаг
+      this.isConfigured = false;
+      this.configError = `Отсутствуют обязательные поля: ${missingFields.join(', ')}. Пожалуйста, настройте инструмент в интерфейсе LibreChat.`;
+      return;
     }
 
     // Убираем trailing slash если есть
@@ -37,16 +67,86 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     this.jwtToken = null;
     this.tokenExpiry = null;
     this.refreshThreshold = 60000; // Обновляем токен за 1 минуту до истечения
+    this.isConfigured = true;
 
-    console.log('WordPress JWT API initialized with URL:', this.apiUrl);
+    console.log('WordPress JWT API успешно инициализирован с URL:', this.apiUrl);
   }
 
   getEnvVariable(name) {
-    return process.env[name];
+    // Пробуем разные способы получения переменных окружения
+    return process.env[name] || 
+           process.env[name.toLowerCase()] || 
+           process.env[name.toUpperCase()];
+  }
+
+  async _call(input) {
+    try {
+      // Проверяем конфигурацию перед выполнением
+      if (!this.isConfigured) {
+        return `Ошибка конфигурации: ${this.configError}`;
+      }
+
+      const parsedInput = this.parseInput(input);
+      const { action, endpoint, data, params, id } = parsedInput;
+      return await this.makeRequest(action, endpoint, data, params, id);
+    } catch (error) {
+      return `Ошибка: ${error.message}`;
+    }
+  }
+
+  // Остальные методы остаются без изменений...
+  parseInput(input) {
+    try {
+      const parsed = JSON.parse(input);
+      return {
+        action: parsed.action || 'GET',
+        endpoint: parsed.endpoint || '/posts',
+        data: parsed.data || {},
+        params: parsed.params || {},
+        id: parsed.id || null
+      };
+    } catch {
+      return this.parseTextInput(input);
+    }
+  }
+
+  parseTextInput(input) {
+    const lowerInput = input.toLowerCase();
+    
+    let action = 'GET';
+    if (lowerInput.includes('создай') || lowerInput.includes('добавь') || lowerInput.includes('новый') || lowerInput.includes('create')) {
+      action = 'POST';
+    } else if (lowerInput.includes('обнови') || lowerInput.includes('измени') || lowerInput.includes('редактируй') || lowerInput.includes('update')) {
+      action = 'PUT';
+    } else if (lowerInput.includes('удали') || lowerInput.includes('убери') || lowerInput.includes('delete')) {
+      action = 'DELETE';
+    }
+
+    let endpoint = '/posts';
+    if (lowerInput.includes('страниц') || lowerInput.includes('page')) endpoint = '/pages';
+    else if (lowerInput.includes('категор') || lowerInput.includes('categor')) endpoint = '/categories';
+    else if (lowerInput.includes('тег') || lowerInput.includes('метк') || lowerInput.includes('tag')) endpoint = '/tags';
+    else if (lowerInput.includes('пользовател') || lowerInput.includes('user')) endpoint = '/users';
+    else if (lowerInput.includes('медиа') || lowerInput.includes('изображен') || lowerInput.includes('файл') || lowerInput.includes('media')) endpoint = '/media';
+    else if (lowerInput.includes('комментар') || lowerInput.includes('comment')) endpoint = '/comments';
+
+    const idMatch = input.match(/id[:\s]*(\d+)/i);
+    const id = idMatch ? idMatch[1] : null;
+
+    return {
+      action,
+      endpoint,
+      data: {},
+      params: {},
+      id
+    };
   }
 
   async getJWTToken() {
-    // Проверяем, нужно ли обновить токен
+    if (!this.isConfigured) {
+      throw new Error(this.configError);
+    }
+
     if (this.jwtToken && this.tokenExpiry && 
         (Date.now() + this.refreshThreshold) < this.tokenExpiry) {
       return this.jwtToken;
@@ -64,13 +164,11 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
           'User-Agent': 'LibreChat-WordPress-API/1.0',
           'Accept': 'application/json'
         },
-        // Настройки для HTTPS
         httpsAgent: new https.Agent({
-          rejectUnauthorized: false, // Временно для тестирования
+          rejectUnauthorized: false,
           keepAlive: true,
           timeout: 30000
         }),
-        // Настройки для HTTP
         httpAgent: new http.Agent({
           keepAlive: true,
           timeout: 30000
@@ -78,8 +176,7 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       });
 
       this.jwtToken = response.data.token;
-      // JWT токены обычно живут 7 дней, устанавливаем срок истечения
-      this.tokenExpiry = Date.now() + (6 * 24 * 60 * 60 * 1000); // 6 дней для безопасности
+      this.tokenExpiry = Date.now() + (6 * 24 * 60 * 60 * 1000);
       
       console.log('JWT токен успешно получен');
       return this.jwtToken;
@@ -89,98 +186,13 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     }
   }
 
-  async validateToken() {
-    if (!this.jwtToken) return false;
-    
-    try {
-      await axios.post(`${this.apiUrl}/wp-json/jwt-auth/v1/token/validate`, {}, {
-        headers: {
-          'Authorization': `Bearer ${this.jwtToken}`,
-          'Content-Type': 'application/json',
-          'User-Agent': 'LibreChat-WordPress-API/1.0'
-        },
-        timeout: 10000,
-        httpsAgent: new https.Agent({
-          rejectUnauthorized: false,
-          keepAlive: true
-        }),
-        httpAgent: new http.Agent({
-          keepAlive: true
-        })
-      });
-      return true;
-    } catch (error) {
-      console.log('Токен недействителен, требуется обновление');
-      return false;
-    }
-  }
-
-  async _call(input) {
-    try {
-      const parsedInput = this.parseInput(input);
-      const { action, endpoint, data, params, id } = parsedInput;
-      return await this.makeRequest(action, endpoint, data, params, id);
-    } catch (error) {
-      return `Ошибка: ${error.message}`;
-    }
-  }
-
-  parseInput(input) {
-    try {
-      // Пытаемся распарсить JSON
-      const parsed = JSON.parse(input);
-      return {
-        action: parsed.action || 'GET',
-        endpoint: parsed.endpoint || '/posts',
-        data: parsed.data || {},
-        params: parsed.params || {},
-        id: parsed.id || null
-      };
-    } catch {
-      // Если не JSON, пытаемся понять намерение из текста
-      return this.parseTextInput(input);
-    }
-  }
-
-  parseTextInput(input) {
-    const lowerInput = input.toLowerCase();
-    
-    // Определяем действие
-    let action = 'GET';
-    if (lowerInput.includes('создай') || lowerInput.includes('добавь') || lowerInput.includes('новый') || lowerInput.includes('create')) {
-      action = 'POST';
-    } else if (lowerInput.includes('обнови') || lowerInput.includes('измени') || lowerInput.includes('редактируй') || lowerInput.includes('update')) {
-      action = 'PUT';
-    } else if (lowerInput.includes('удали') || lowerInput.includes('убери') || lowerInput.includes('delete')) {
-      action = 'DELETE';
-    }
-
-    // Определяем endpoint
-    let endpoint = '/posts';
-    if (lowerInput.includes('страниц') || lowerInput.includes('page')) endpoint = '/pages';
-    else if (lowerInput.includes('категор') || lowerInput.includes('categor')) endpoint = '/categories';
-    else if (lowerInput.includes('тег') || lowerInput.includes('метк') || lowerInput.includes('tag')) endpoint = '/tags';
-    else if (lowerInput.includes('пользовател') || lowerInput.includes('user')) endpoint = '/users';
-    else if (lowerInput.includes('медиа') || lowerInput.includes('изображен') || lowerInput.includes('файл') || lowerInput.includes('media')) endpoint = '/media';
-    else if (lowerInput.includes('комментар') || lowerInput.includes('comment')) endpoint = '/comments';
-
-    // Извлекаем ID если есть
-    const idMatch = input.match(/id[:\s]*(\d+)/i);
-    const id = idMatch ? idMatch[1] : null;
-
-    return {
-      action,
-      endpoint,
-      data: {},
-      params: {},
-      id
-    };
-  }
-
   async makeRequest(method, endpoint, data = {}, params = {}, id = null) {
+    if (!this.isConfigured) {
+      throw new Error(this.configError);
+    }
+
     const token = await this.getJWTToken();
     
-    // Формируем URL
     let url = `${this.apiUrl}/wp-json/wp/v2${endpoint}`;
     if (id) {
       url += `/${id}`;
@@ -197,13 +209,11 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       },
       params,
       timeout: 30000,
-      // Настройки для HTTPS
       httpsAgent: new https.Agent({
-        rejectUnauthorized: false, // Временно для тестирования
+        rejectUnauthorized: false,
         keepAlive: true,
         timeout: 30000
       }),
-      // Настройки для HTTP
       httpAgent: new http.Agent({
         keepAlive: true,
         timeout: 30000
@@ -220,7 +230,6 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       return this.formatResponse(response.data, method, endpoint, id);
     } catch (error) {
       if (error.response?.status === 401) {
-        // Токен истек, пытаемся получить новый
         console.log('Токен истек, получаем новый...');
         this.jwtToken = null;
         this.tokenExpiry = null;
@@ -274,7 +283,6 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       return `✅ Элемент успешно удален.`;
     }
 
-    // Для GET запроса одного элемента
     if (data.id) {
       const itemType = this.getItemType(endpoint);
       return `${itemType} ID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nДата создания: ${data.date || 'неизвестна'}\nПоследнее изменение: ${data.modified || 'неизвестно'}\nСсылка: ${data.link || 'недоступна'}`;
@@ -294,116 +302,6 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       '/comments': 'комментарий'
     };
     return types[endpoint] || 'элемент';
-  }
-
-  // Специализированные методы для удобства использования
-  async getPosts(params = {}) {
-    return this.makeRequest('GET', '/posts', {}, params);
-  }
-
-  async createPost(title, content, status = 'draft', categories = []) {
-    const data = { title, content, status };
-    if (categories.length > 0) data.categories = categories;
-    return this.makeRequest('POST', '/posts', data);
-  }
-
-  async updatePost(id, updates) {
-    return this.makeRequest('PUT', '/posts', updates, {}, id);
-  }
-
-  async deletePost(id) {
-    return this.makeRequest('DELETE', '/posts', {}, {}, id);
-  }
-
-  async getPages(params = {}) {
-    return this.makeRequest('GET', '/pages', {}, params);
-  }
-
-  async createPage(title, content, status = 'draft') {
-    return this.makeRequest('POST', '/pages', { title, content, status });
-  }
-
-  async updatePage(id, updates) {
-    return this.makeRequest('PUT', '/pages', updates, {}, id);
-  }
-
-  async deletePage(id) {
-    return this.makeRequest('DELETE', '/pages', {}, {}, id);
-  }
-
-  async getCategories() {
-    return this.makeRequest('GET', '/categories');
-  }
-
-  async createCategory(name, description = '', slug = '') {
-    const data = { name, description };
-    if (slug) data.slug = slug;
-    return this.makeRequest('POST', '/categories', data);
-  }
-
-  async updateCategory(id, updates) {
-    return this.makeRequest('PUT', '/categories', updates, {}, id);
-  }
-
-  async deleteCategory(id) {
-    return this.makeRequest('DELETE', '/categories', {}, {}, id);
-  }
-
-  async getTags() {
-    return this.makeRequest('GET', '/tags');
-  }
-
-  async createTag(name, description = '', slug = '') {
-    const data = { name, description };
-    if (slug) data.slug = slug;
-    return this.makeRequest('POST', '/tags', data);
-  }
-
-  async updateTag(id, updates) {
-    return this.makeRequest('PUT', '/tags', updates, {}, id);
-  }
-
-  async deleteTag(id) {
-    return this.makeRequest('DELETE', '/tags', {}, {}, id);
-  }
-
-  async getUsers() {
-    return this.makeRequest('GET', '/users');
-  }
-
-  async getCurrentUser() {
-    return this.makeRequest('GET', '/users', {}, {}, 'me');
-  }
-
-  async getMedia(params = {}) {
-    return this.makeRequest('GET', '/media', {}, params);
-  }
-
-  async getComments(params = {}) {
-    return this.makeRequest('GET', '/comments', {}, params);
-  }
-
-  async createComment(postId, content, author_name = '', author_email = '') {
-    const data = { 
-      post: postId, 
-      content, 
-      author_name, 
-      author_email 
-    };
-    return this.makeRequest('POST', '/comments', data);
-  }
-
-  async updateComment(id, updates) {
-    return this.makeRequest('PUT', '/comments', updates, {}, id);
-  }
-
-  async deleteComment(id) {
-    return this.makeRequest('DELETE', '/comments', {}, {}, id);
-  }
-
-  async searchContent(query, type = 'posts') {
-    const params = { search: query, per_page: 10 };
-    return this.makeRequest('GET', `/${type}`, {}, params);
   }
 }
 
