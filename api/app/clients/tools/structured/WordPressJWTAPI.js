@@ -8,7 +8,7 @@ class WordPressJWTAPI extends Tool {
     super();
     
     this.name = 'wordpress_jwt_api';
-    this.description = `WordPress REST API tool with JWT authentication for comprehensive content management. Can create, read, update, and delete posts, pages, categories, tags, media, users, and comments. Automatically handles JWT token refresh. Requires WordPress site URL, username, and password.
+    this.description = `WordPress REST API tool with JWT authentication for comprehensive content management. Can create, read, update, and delete posts, pages, categories, tags, media, users, and comments. Automatically handles JWT token refresh.
 
 Available operations:
 - Posts: get_posts, create_post, update_post, delete_post
@@ -22,66 +22,39 @@ Available operations:
 
 Input format: JSON string with action, endpoint, data, params, and id fields, or natural language description.`;
 
-    // Приоритет: сначала fields (от пользователя), потом переменные окружения
-    this.apiUrl = fields.WORDPRESS_API_URL || 
-                  fields.wordpress_api_url || 
-                  this.getEnvVariable('WORDPRESS_API_URL') || 
-                  this.getEnvVariable('WORDPRESS_URL');
-                  
-    this.username = fields.WORDPRESS_USERNAME || 
-                    fields.wordpress_username || 
-                    this.getEnvVariable('WORDPRESS_USERNAME') || 
-                    this.getEnvVariable('WORDPRESS_USER');
-                    
-    this.password = fields.WORDPRESS_PASSWORD || 
-                    fields.wordpress_password || 
-                    this.getEnvVariable('WORDPRESS_PASSWORD') || 
-                    this.getEnvVariable('WORDPRESS_PASS');
+    // Получаем данные с приоритетом: fields -> env
+    this.apiUrl = fields.WORDPRESS_API_URL || this.getEnvVariable('WORDPRESS_API_URL');
+    this.username = fields.WORDPRESS_USERNAME || this.getEnvVariable('WORDPRESS_USERNAME');
+    this.password = fields.WORDPRESS_PASSWORD || this.getEnvVariable('WORDPRESS_PASSWORD');
 
-    // Логирование для отладки
     console.log('WordPress JWT API инициализация:');
-    console.log('- fields:', Object.keys(fields));
     console.log('- apiUrl:', this.apiUrl ? 'установлен' : 'НЕ УСТАНОВЛЕН');
-    console.log('- username:', this.username ? 'установлен' : 'НЕ УСТАНОВЛЕН');
+    console.log('- username:', this.username ? `установлен (${this.username})` : 'НЕ УСТАНОВЛЕН');
     console.log('- password:', this.password ? 'установлен' : 'НЕ УСТАНОВЛЕН');
 
-    // Проверяем наличие всех необходимых данных
     if (!this.apiUrl || !this.username || !this.password) {
-      const missingFields = [];
-      if (!this.apiUrl) missingFields.push('WORDPRESS_API_URL');
-      if (!this.username) missingFields.push('WORDPRESS_USERNAME');
-      if (!this.password) missingFields.push('WORDPRESS_PASSWORD');
-      
-      console.error('Отсутствуют обязательные поля:', missingFields);
-      
-      // Не выбрасываем ошибку, а устанавливаем флаг
       this.isConfigured = false;
-      this.configError = `Отсутствуют обязательные поля: ${missingFields.join(', ')}. Пожалуйста, настройте инструмент в интерфейсе LibreChat.`;
+      this.configError = `Отсутствуют обязательные поля. Настройте инструмент в интерфейсе LibreChat.`;
       return;
     }
 
-    // Убираем trailing slash если есть
+    // Убираем trailing slash
     this.apiUrl = this.apiUrl.replace(/\/$/, '');
     
-    // JWT токен и время истечения
     this.jwtToken = null;
     this.tokenExpiry = null;
-    this.refreshThreshold = 60000; // Обновляем токен за 1 минуту до истечения
+    this.refreshThreshold = 60000;
     this.isConfigured = true;
 
     console.log('WordPress JWT API успешно инициализирован с URL:', this.apiUrl);
   }
 
   getEnvVariable(name) {
-    // Пробуем разные способы получения переменных окружения
-    return process.env[name] || 
-           process.env[name.toLowerCase()] || 
-           process.env[name.toUpperCase()];
+    return process.env[name];
   }
 
   async _call(input) {
     try {
-      // Проверяем конфигурацию перед выполнением
       if (!this.isConfigured) {
         return `Ошибка конфигурации: ${this.configError}`;
       }
@@ -94,7 +67,6 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     }
   }
 
-  // Остальные методы остаются без изменений...
   parseInput(input) {
     try {
       const parsed = JSON.parse(input);
@@ -133,13 +105,7 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     const idMatch = input.match(/id[:\s]*(\d+)/i);
     const id = idMatch ? idMatch[1] : null;
 
-    return {
-      action,
-      endpoint,
-      data: {},
-      params: {},
-      id
-    };
+    return { action, endpoint, data: {}, params: {}, id };
   }
 
   async getJWTToken() {
@@ -153,11 +119,16 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     }
 
     try {
-      console.log('Получение нового JWT токена для:', this.apiUrl);
-      const response = await axios.post(`${this.apiUrl}/wp-json/jwt-auth/v1/token`, {
+      console.log('Получение JWT токена для пользователя:', this.username);
+      
+      const authData = {
         username: this.username,
         password: this.password
-      }, {
+      };
+      
+      console.log('Отправка запроса на:', `${this.apiUrl}/wp-json/jwt-auth/v1/token`);
+      
+      const response = await axios.post(`${this.apiUrl}/wp-json/jwt-auth/v1/token`, authData, {
         timeout: 30000,
         headers: {
           'Content-Type': 'application/json',
@@ -175,13 +146,24 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
         })
       });
 
+      if (!response.data || !response.data.token) {
+        throw new Error('Токен не получен от сервера');
+      }
+
       this.jwtToken = response.data.token;
       this.tokenExpiry = Date.now() + (6 * 24 * 60 * 60 * 1000);
       
       console.log('JWT токен успешно получен');
+      console.log('Пользователь:', response.data.user_display_name || response.data.user_nicename);
+      
       return this.jwtToken;
     } catch (error) {
       console.error('Ошибка получения JWT токена:', error.response?.data || error.message);
+      
+      if (error.response?.status === 403) {
+        throw new Error(`Ошибка авторизации: неверные учетные данные для пользователя ${this.username}`);
+      }
+      
       throw new Error(`Не удалось получить JWT токен: ${error.response?.data?.message || error.message}`);
     }
   }
@@ -196,6 +178,12 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     let url = `${this.apiUrl}/wp-json/wp/v2${endpoint}`;
     if (id) {
       url += `/${id}`;
+    }
+
+    // Специальная обработка для PUT запросов
+    if (method === 'PUT' && !id && endpoint.includes('/')) {
+      // URL уже содержит ID в endpoint
+      url = `${this.apiUrl}/wp-json/wp/v2${endpoint}`;
     }
 
     const config = {
@@ -226,9 +214,17 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
 
     try {
       console.log(`Выполняется ${method} запрос к: ${url}`);
+      if (Object.keys(data).length > 0) {
+        console.log('Данные запроса:', JSON.stringify(data, null, 2));
+      }
+      
       const response = await axios(config);
+      console.log('Запрос выполнен успешно, статус:', response.status);
+      
       return this.formatResponse(response.data, method, endpoint, id);
     } catch (error) {
+      console.error('Ошибка запроса:', error.response?.status, error.response?.data);
+      
       if (error.response?.status === 401) {
         console.log('Токен истек, получаем новый...');
         this.jwtToken = null;
@@ -240,16 +236,27 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
           const retryResponse = await axios(config);
           return this.formatResponse(retryResponse.data, method, endpoint, id);
         } catch (retryError) {
-          return `Ошибка аутентификации: ${retryError.response?.data?.message || retryError.message}`;
+          return `Ошибка аутентификации: ${retryError.message}`;
         }
       }
 
       if (error.response) {
-        console.error(`WordPress API ошибка: ${error.response.status}`, error.response.data);
-        return `WordPress API Ошибка: ${error.response.status} - ${error.response.data?.message || error.response.statusText}`;
+        const errorData = error.response.data;
+        
+        if (error.response.status === 403) {
+          if (errorData.code === 'rest_cannot_create') {
+            return `Ошибка прав доступа: Пользователь ${this.username} не имеет права на создание контента. Проверьте роль пользователя в WordPress.`;
+          }
+          return `Ошибка доступа (403): ${errorData.message || 'Недостаточно прав'}`;
+        }
+        
+        if (error.response.status === 404) {
+          return `Ошибка маршрута (404): Эндпоинт ${endpoint} не найден или метод ${method} не поддерживается.`;
+        }
+        
+        return `WordPress API Ошибка: ${error.response.status} - ${errorData.message || error.response.statusText}`;
       }
 
-      console.error('Сетевая ошибка:', error.message);
       return `Сетевая ошибка: ${error.message}`;
     }
   }
