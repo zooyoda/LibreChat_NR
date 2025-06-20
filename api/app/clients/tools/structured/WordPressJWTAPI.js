@@ -1,443 +1,486 @@
-const { Tool } = require('langchain/tools');
 const axios = require('axios');
-const https = require('https');
-const http = require('http');
 
-class WordPressJWTAPI extends Tool {
-  constructor(fields = {}) {
-    super();
-    this.name = 'wordpress_jwt_api';
-    this.description = `WordPress REST API tool with JWT authentication for comprehensive content management. Can create, read, update, and delete posts, pages, categories, tags, media, users, and comments. Automatically handles JWT token refresh. Requires WordPress site URL, username, and password.`;
+class WordPressJWTAPI {
+  constructor(fields) {
+    this.name = 'wordpressjwtapi';
+    this.description = `WordPress REST API tool with JWT authentication for comprehensive content management.
     
-    this.apiUrl = fields.WORDPRESS_API_URL || this.getEnvVariable('WORDPRESS_API_URL');
-    this.username = fields.WORDPRESS_USERNAME || this.getEnvVariable('WORDPRESS_USERNAME');
-    this.password = fields.WORDPRESS_PASSWORD || this.getEnvVariable('WORDPRESS_PASSWORD');
+    Available operations:
+    - Posts: create, read, update, delete posts and pages
+    - Categories: manage categories and tags hierarchy  
+    - Comments: moderate and manage comments
+    - Media: upload and manage media files
+    - Users: manage user accounts and permissions
     
-    if (!this.apiUrl || !this.username || !this.password) {
-      throw new Error('WordPress API URL, username, and password are required');
-    }
+    Requires WordPress admin credentials with appropriate capabilities.`;
     
-    // Убираем trailing slash если есть
-    this.apiUrl = this.apiUrl.replace(/\/$/, '');
+    this.apiUrl = fields.WORDPRESS_API_URL || process.env.WORDPRESS_API_URL;
+    this.username = fields.WORDPRESS_USERNAME || process.env.WORDPRESS_USERNAME;
+    this.password = fields.WORDPRESS_PASSWORD || process.env.WORDPRESS_PASSWORD;
     
-    // JWT токен и время истечения
+    // Ensure API URL ends without trailing slash and add wp-json path
+    this.apiUrl = this.apiUrl.replace(/\/$/, '') + '/wp-json/wp/v2';
     this.jwtToken = null;
     this.tokenExpiry = null;
-    this.refreshThreshold = 60000; // Обновляем токен за 1 минуту до истечения
-    
-    console.log('WordPress JWT API initialized with URL:', this.apiUrl);
-  }
-
-  getEnvVariable(name) {
-    return process.env[name];
   }
 
   async getJWTToken() {
-    // Проверяем, нужно ли обновить токен
-    if (this.jwtToken && this.tokenExpiry && 
-        (Date.now() + this.refreshThreshold) < this.tokenExpiry) {
-      return this.jwtToken;
-    }
-
     try {
-      console.log('Получение нового JWT токена для:', this.apiUrl);
-      
-      const response = await axios.post(`${this.apiUrl}/wp-json/jwt-auth/v1/token`, {
+      // Check if token is still valid
+      if (this.jwtToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
+        return this.jwtToken;
+      }
+
+      // Get new token
+      const authUrl = this.apiUrl.replace('/wp/v2', '/jwt-auth/v1/token');
+      const response = await axios.post(authUrl, {
         username: this.username,
         password: this.password
       }, {
-        timeout: 30000,
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'LibreChat-WordPress-API/1.0',
-          'Accept': 'application/json'
-        },
-        // Настройки для HTTPS
-        httpsAgent: new https.Agent({
-          rejectUnauthorized: false, // Временно для тестирования
-          keepAlive: true,
-          timeout: 30000
-        }),
-        // Настройки для HTTP
-        httpAgent: new http.Agent({
-          keepAlive: true,
-          timeout: 30000
-        })
-      });
-
-      this.jwtToken = response.data.token;
-      // JWT токены обычно живут 7 дней, устанавливаем срок истечения
-      this.tokenExpiry = Date.now() + (6 * 24 * 60 * 60 * 1000); // 6 дней для безопасности
-      
-      console.log('JWT токен успешно получен');
-      return this.jwtToken;
-    } catch (error) {
-      console.error('Ошибка получения JWT токена:', error.response?.data || error.message);
-      throw new Error(`Не удалось получить JWT токен: ${error.response?.data?.message || error.message}`);
-    }
-  }
-
-  async validateToken() {
-    if (!this.jwtToken) return false;
-    
-    try {
-      await axios.post(`${this.apiUrl}/wp-json/jwt-auth/v1/token/validate`, {}, {
-        headers: {
-          'Authorization': `Bearer ${this.jwtToken}`,
-          'Content-Type': 'application/json',
-          'User-Agent': 'LibreChat-WordPress-API/1.0'
-        },
         timeout: 10000,
-        httpsAgent: new https.Agent({
-          rejectUnauthorized: false,
-          keepAlive: true
-        }),
-        httpAgent: new http.Agent({
-          keepAlive: true
-        })
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
-      return true;
+
+      if (response.data && response.data.token) {
+        this.jwtToken = response.data.token;
+        // Set expiry to 23 hours from now (tokens usually expire in 24h)
+        this.tokenExpiry = Date.now() + (23 * 60 * 60 * 1000);
+        return this.jwtToken;
+      } else {
+        throw new Error('No token received from WordPress JWT endpoint');
+      }
     } catch (error) {
-      console.log('Токен недействителен, требуется обновление');
-      return false;
+      console.error('JWT Token Error:', error.message);
+      throw new Error(`Failed to authenticate with WordPress: ${error.message}`);
     }
   }
 
-  async _call(input) {
+  async makeRequest(method, endpoint, data = null, params = null, id = null) {
     try {
-      const parsedInput = this.parseInput(input);
-      const { action, endpoint, data, params, id } = parsedInput;
+      const token = await this.getJWTToken();
       
-      return await this.makeRequest(action, endpoint, data, params, id);
-    } catch (error) {
-      return `Ошибка: ${error.message}`;
-    }
-  }
+      let url = `${this.apiUrl}/${endpoint}`;
+      if (id) {
+        url += `/${id}`;
+      }
 
-  parseInput(input) {
-    try {
-      // Пытаемся распарсить JSON
-      const parsed = JSON.parse(input);
-      return {
-        action: parsed.action || 'GET',
-        endpoint: parsed.endpoint || '/posts',
-        data: parsed.data || {},
-        params: parsed.params || {},
-        id: parsed.id || null
+      const config = {
+        method: method,
+        url: url,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
       };
-    } catch {
-      // Если не JSON, пытаемся понять намерение из текста
-      return this.parseTextInput(input);
-    }
-  }
 
-  parseTextInput(input) {
-    const lowerInput = input.toLowerCase();
-    
-    // Определяем действие
-    let action = 'GET';
-    if (lowerInput.includes('создай') || lowerInput.includes('добавь') || lowerInput.includes('новый') || lowerInput.includes('create')) {
-      action = 'POST';
-    } else if (lowerInput.includes('обнови') || lowerInput.includes('измени') || lowerInput.includes('редактируй') || lowerInput.includes('update')) {
-      action = 'PUT';
-    } else if (lowerInput.includes('удали') || lowerInput.includes('убери') || lowerInput.includes('delete')) {
-      action = 'DELETE';
-    }
-    
-    // Определяем endpoint
-    let endpoint = '/posts';
-    if (lowerInput.includes('страниц') || lowerInput.includes('page')) endpoint = '/pages';
-    else if (lowerInput.includes('категор') || lowerInput.includes('categor')) endpoint = '/categories';
-    else if (lowerInput.includes('тег') || lowerInput.includes('метк') || lowerInput.includes('tag')) endpoint = '/tags';
-    else if (lowerInput.includes('пользовател') || lowerInput.includes('user')) endpoint = '/users';
-    else if (lowerInput.includes('медиа') || lowerInput.includes('изображен') || lowerInput.includes('файл') || lowerInput.includes('media')) endpoint = '/media';
-    else if (lowerInput.includes('комментар') || lowerInput.includes('comment')) endpoint = '/comments';
-    
-    // Извлекаем данные для создания контента
-    let data = {};
-    
-    if (action === 'POST') {
-      // Общие поля для всех типов контента
-      const titleMatch = input.match(/title=([^&]+)/i);
-      if (titleMatch) {
-        data.title = decodeURIComponent(titleMatch[1].replace(/\+/g, ' '));
+      if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+        config.data = data;
       }
-      
-      const contentMatch = input.match(/content=([^&]+)/i);
-      if (contentMatch) {
-        data.content = decodeURIComponent(contentMatch[1].replace(/\+/g, ' '));
-      }
-      
-      const statusMatch = input.match(/status=([^&]+)/i);
-      if (statusMatch) {
-        data.status = statusMatch[1];
-      }
-      
-      // Специфичные поля для постов
-      if (endpoint === '/posts') {
-        // Категории для постов
-        const categoryMatch = input.match(/category=(\d+)/i);
-        if (categoryMatch) {
-          data.categories = [parseInt(categoryMatch[1])];
-        }
-        
-        // Теги для постов
-        const tagMatch = input.match(/tag=(\d+)/i);
-        if (tagMatch) {
-          data.tags = [parseInt(tagMatch[1])];
-        }
-        
-        // Множественные категории
-        const categoriesMatch = input.match(/categories=(\d+(?:,\d+)*)/i);
-        if (categoriesMatch) {
-          data.categories = categoriesMatch[1].split(',').map(id => parseInt(id.trim()));
-        }
-        
-        // Множественные теги
-        const tagsMatch = input.match(/tags=(\d+(?:,\d+)*)/i);
-        if (tagsMatch) {
-          data.tags = tagsMatch[1].split(',').map(id => parseInt(id.trim()));
-        }
-      }
-      
-      // Специфичные поля для категорий
-      if (endpoint === '/categories') {
-        const nameMatch = input.match(/name=([^&]+)/i);
-        if (nameMatch) {
-          data.name = decodeURIComponent(nameMatch[1].replace(/\+/g, ' '));
-        }
-        
-        const descriptionMatch = input.match(/description=([^&]+)/i);
-        if (descriptionMatch) {
-          data.description = decodeURIComponent(descriptionMatch[1].replace(/\+/g, ' '));
-        }
-        
-        const slugMatch = input.match(/slug=([^&]+)/i);
-        if (slugMatch) {
-          data.slug = slugMatch[1];
-        }
-        
-        const parentCatMatch = input.match(/parent=(\d+)/i);
-        if (parentCatMatch) {
-          data.parent = parseInt(parentCatMatch[1]);
-        }
-      }
-      
-      // Специфичные поля для тегов
-      if (endpoint === '/tags') {
-        const nameMatch = input.match(/name=([^&]+)/i);
-        if (nameMatch) {
-          data.name = decodeURIComponent(nameMatch[1].replace(/\+/g, ' '));
-        }
-        
-        const descriptionMatch = input.match(/description=([^&]+)/i);
-        if (descriptionMatch) {
-          data.description = decodeURIComponent(descriptionMatch[1].replace(/\+/g, ' '));
-        }
-        
-        const slugMatch = input.match(/slug=([^&]+)/i);
-        if (slugMatch) {
-          data.slug = slugMatch[1];
-        }
-      }
-    }
-    
-    // Извлекаем ID если есть
-    const idMatch = input.match(/id[:\s]*(\d+)/i);
-    const id = idMatch ? idMatch[1] : null;
-    
-    return { 
-      action, 
-      endpoint, 
-      data, 
-      params: {},
-      id 
-    };
-  }
 
-  async makeRequest(method, endpoint, data = {}, params = {}, id = null) {
-    const token = await this.getJWTToken();
-    
-    // Формируем URL
-    let url = `${this.apiUrl}/wp-json/wp/v2${endpoint}`;
-    if (id) {
-      url += `/${id}`;
-    }
-    
-    const config = {
-      method,
-      url,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'LibreChat-WordPress-API/1.0',
-        'Accept': 'application/json'
-      },
-      params,
-      timeout: 30000,
-      // Настройки для HTTPS
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: false, // Временно для тестирования
-        keepAlive: true,
-        timeout: 30000
-      }),
-      // Настройки для HTTP  
-      httpAgent: new http.Agent({
-        keepAlive: true,
-        timeout: 30000
-      })
-    };
-    
-    if (method !== 'GET' && method !== 'DELETE' && Object.keys(data).length > 0) {
-      config.data = data;
-    }
-    
-    try {
-      console.log(`Выполняется ${method} запрос к: ${url}`);
-      if (Object.keys(data).length > 0) {
-        console.log('Данные запроса:', JSON.stringify(data, null, 2));
+      if (params) {
+        config.params = params;
       }
+
       const response = await axios(config);
-      return this.formatResponse(response.data, method, endpoint, id);
+      return this.formatResponse(response.data, method, endpoint);
     } catch (error) {
-      if (error.response?.status === 401) {
-        // Токен истек, пытаемся получить новый
-        console.log('Токен истек, получаем новый...');
-        this.jwtToken = null;
-        this.tokenExpiry = null;
-        
-        try {
-          const newToken = await this.getJWTToken();
-          config.headers['Authorization'] = `Bearer ${newToken}`;
-          const retryResponse = await axios(config);
-          return this.formatResponse(retryResponse.data, method, endpoint, id);
-        } catch (retryError) {
-          return `Ошибка аутентификации: ${retryError.response?.data?.message || retryError.message}`;
-        }
-      }
-      
-      if (error.response) {
-        console.error(`WordPress API ошибка: ${error.response.status}`, error.response.data);
-        return `WordPress API Ошибка: ${error.response.status} - ${error.response.data?.message || error.response.statusText}`;
-      }
-      
-      console.error('Сетевая ошибка:', error.message);
-      return `Сетевая ошибка: ${error.message}`;
+      return this.handleError(error);
     }
   }
 
-  formatResponse(data, method, endpoint, id) {
+  formatResponse(data, method, endpoint) {
+    const timestamp = new Date().toISOString();
+    
     if (Array.isArray(data)) {
-      const itemType = this.getItemType(endpoint);
-      const items = data.slice(0, 5).map(item => ({
-        id: item.id,
-        title: item.title?.rendered || item.name || 'Без названия',
-        status: item.status || 'неизвестен',
-        date: item.date || item.date_gmt || 'неизвестна'
-      }));
-      
-      return `Найдено ${data.length} ${itemType}. Показываю первые ${Math.min(data.length, 5)}:\n\n${items.map(item => 
-        `ID: ${item.id}\nНазвание: ${item.title}\nСтатус: ${item.status}\nДата: ${item.date}\n`
-      ).join('\n')}${data.length > 5 ? `\n... и еще ${data.length - 5}` : ''}`;
+      return {
+        success: true,
+        action: `${method} ${endpoint}`,
+        timestamp: timestamp,
+        count: data.length,
+        data: data.map(item => this.formatItem(item))
+      };
+    } else {
+      return {
+        success: true,
+        action: `${method} ${endpoint}`,
+        timestamp: timestamp,
+        data: this.formatItem(data)
+      };
     }
-    
-    if (method === 'POST') {
-      const itemType = this.getItemType(endpoint);
-      return `✅ Успешно создан новый ${itemType}!\nID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nСсылка: ${data.link || 'недоступна'}`;
-    }
-    
-    if (method === 'PUT') {
-      const itemType = this.getItemType(endpoint);
-      return `✅ Успешно обновлен ${itemType}!\nID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nПоследнее изменение: ${data.modified || 'неизвестно'}`;
-    }
-    
-    if (method === 'DELETE') {
-      return `✅ Элемент успешно удален.`;
-    }
-    
-    // Для GET запроса одного элемента
-    if (data.id) {
-      const itemType = this.getItemType(endpoint);
-      return `${itemType} ID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nДата создания: ${data.date || 'неизвестна'}\nПоследнее изменение: ${data.modified || 'неизвестно'}\nСсылка: ${data.link || 'недоступна'}`;
-    }
-    
-    return JSON.stringify(data, null, 2);
   }
 
-  getItemType(endpoint) {
-    const types = {
-      '/posts': 'пост',
-      '/pages': 'страница',
-      '/categories': 'категория',
-      '/tags': 'тег',
-      '/users': 'пользователь',
-      '/media': 'медиафайл',
-      '/comments': 'комментарий'
+  formatItem(item) {
+    if (!item) return item;
+    
+    return {
+      id: item.id,
+      title: item.title?.rendered || item.title || item.name,
+      content: item.content?.rendered || item.content,
+      excerpt: item.excerpt?.rendered || item.excerpt,
+      status: item.status,
+      date: item.date,
+      modified: item.modified,
+      author: item.author,
+      categories: item.categories,
+      tags: item.tags,
+      link: item.link,
+      slug: item.slug,
+      type: item.type || 'unknown'
     };
-    return types[endpoint] || 'элемент';
   }
 
-  // Специализированные методы для удобства использования
+  handleError(error) {
+    const timestamp = new Date().toISOString();
+    let errorMessage = 'Unknown error occurred';
+    let statusCode = 500;
+
+    if (error.response) {
+      statusCode = error.response.status;
+      errorMessage = error.response.data?.message || error.response.statusText || 'API Error';
+      
+      if (statusCode === 401) {
+        this.jwtToken = null; // Clear invalid token
+        this.tokenExpiry = null;
+        errorMessage = 'Authentication failed. Please check WordPress credentials.';
+      } else if (statusCode === 403) {
+        errorMessage = 'Insufficient permissions. User needs editor/administrator role.';
+      } else if (statusCode === 404) {
+        errorMessage = 'Resource not found or WordPress REST API not available.';
+      }
+    } else if (error.request) {
+      errorMessage = 'No response from WordPress server. Check URL and connectivity.';
+    } else {
+      errorMessage = error.message;
+    }
+
+    return {
+      success: false,
+      error: errorMessage,
+      statusCode: statusCode,
+      timestamp: timestamp
+    };
+  }
+
+  // Posts Management
   async getPosts(params = {}) {
-    return this.makeRequest('GET', '/posts', {}, params);
+    const defaultParams = {
+      per_page: 10,
+      status: 'publish,draft',
+      _embed: true
+    };
+    return await this.makeRequest('GET', 'posts', null, { ...defaultParams, ...params });
+  }
+
+  async getPost(id) {
+    return await this.makeRequest('GET', 'posts', null, { _embed: true }, id);
   }
 
   async createPost(title, content, status = 'draft', categories = [], tags = []) {
-    const data = { title, content, status };
-    if (categories.length > 0) data.categories = categories;
-    if (tags.length > 0) data.tags = tags;
-    return this.makeRequest('POST', '/posts', data);
+    const postData = {
+      title: title,
+      content: content,
+      status: status,
+      categories: categories,
+      tags: tags
+    };
+    
+    return await this.makeRequest('POST', 'posts', postData);
   }
 
   async updatePost(id, updates) {
-    return this.makeRequest('PUT', '/posts', updates, {}, id);
+    return await this.makeRequest('PUT', 'posts', updates, null, id);
   }
 
   async deletePost(id) {
-    return this.makeRequest('DELETE', '/posts', {}, {}, id);
+    return await this.makeRequest('DELETE', 'posts', null, null, id);
   }
 
+  // Pages Management
   async getPages(params = {}) {
-    return this.makeRequest('GET', '/pages', {}, params);
+    const defaultParams = {
+      per_page: 10,
+      status: 'publish,draft',
+      _embed: true
+    };
+    return await this.makeRequest('GET', 'pages', null, { ...defaultParams, ...params });
   }
 
-  async createPage(title, content, status = 'draft', parent = null) {
-    const data = { title, content, status };
-    if (parent) data.parent = parent;
-    return this.makeRequest('POST', '/pages', data);
+  async createPage(title, content, status = 'draft', parent = 0) {
+    const pageData = {
+      title: title,
+      content: content,
+      status: status,
+      parent: parent
+    };
+    
+    return await this.makeRequest('POST', 'pages', pageData);
   }
 
-  async getCategories() {
-    return this.makeRequest('GET', '/categories');
+  // Categories Management
+  async getCategories(params = {}) {
+    const defaultParams = {
+      per_page: 50,
+      hide_empty: false
+    };
+    return await this.makeRequest('GET', 'categories', null, { ...defaultParams, ...params });
   }
 
-  async createCategory(name, description = '', slug = '', parent = null) {
-    const data = { name, description };
-    if (slug) data.slug = slug;
-    if (parent) data.parent = parent;
-    return this.makeRequest('POST', '/categories', data);
+  async createCategory(name, description = '', parent = 0, slug = '') {
+    const categoryData = {
+      name: name,
+      description: description,
+      parent: parent
+    };
+    
+    if (slug) {
+      categoryData.slug = slug;
+    }
+    
+    return await this.makeRequest('POST', 'categories', categoryData);
   }
 
-  async getTags() {
-    return this.makeRequest('GET', '/tags');
+  async updateCategory(id, updates) {
+    return await this.makeRequest('PUT', 'categories', updates, null, id);
+  }
+
+  async deleteCategory(id) {
+    return await this.makeRequest('DELETE', 'categories', null, null, id);
+  }
+
+  // Tags Management
+  async getTags(params = {}) {
+    const defaultParams = {
+      per_page: 50,
+      hide_empty: false
+    };
+    return await this.makeRequest('GET', 'tags', null, { ...defaultParams, ...params });
   }
 
   async createTag(name, description = '', slug = '') {
-    const data = { name, description };
-    if (slug) data.slug = slug;
-    return this.makeRequest('POST', '/tags', data);
+    const tagData = {
+      name: name,
+      description: description
+    };
+    
+    if (slug) {
+      tagData.slug = slug;
+    }
+    
+    return await this.makeRequest('POST', 'tags', tagData);
   }
 
-  async getUsers() {
-    return this.makeRequest('GET', '/users');
-  }
-
-  async getMedia(params = {}) {
-    return this.makeRequest('GET', '/media', {}, params);
-  }
-
+  // Comments Management
   async getComments(params = {}) {
-    return this.makeRequest('GET', '/comments', {}, params);
+    const defaultParams = {
+      per_page: 20,
+      status: 'approve'
+    };
+    return await this.makeRequest('GET', 'comments', null, { ...defaultParams, ...params });
+  }
+
+  async createComment(postId, content, author_name = '', author_email = '') {
+    const commentData = {
+      post: postId,
+      content: content,
+      author_name: author_name,
+      author_email: author_email
+    };
+    
+    return await this.makeRequest('POST', 'comments', commentData);
+  }
+
+  async updateComment(id, updates) {
+    return await this.makeRequest('PUT', 'comments', updates, null, id);
+  }
+
+  async deleteComment(id) {
+    return await this.makeRequest('DELETE', 'comments', null, null, id);
+  }
+
+  // Media Management
+  async getMedia(params = {}) {
+    const defaultParams = {
+      per_page: 20,
+      media_type: 'image'
+    };
+    return await this.makeRequest('GET', 'media', null, { ...defaultParams, ...params });
+  }
+
+  async uploadMedia(fileBuffer, filename, mimeType, title = '', description = '') {
+    try {
+      const token = await this.getJWTToken();
+      
+      const FormData = require('form-data');
+      const form = new FormData();
+      
+      form.append('file', fileBuffer, {
+        filename: filename,
+        contentType: mimeType
+      });
+      
+      if (title) form.append('title', title);
+      if (description) form.append('description', description);
+
+      const config = {
+        method: 'POST',
+        url: `${this.apiUrl}/media`,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...form.getHeaders()
+        },
+        data: form,
+        timeout: 60000
+      };
+
+      const response = await axios(config);
+      return this.formatResponse(response.data, 'POST', 'media');
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  // Users Management
+  async getUsers(params = {}) {
+    const defaultParams = {
+      per_page: 20,
+      context: 'view'
+    };
+    return await this.makeRequest('GET', 'users', null, { ...defaultParams, ...params });
+  }
+
+  async getCurrentUser() {
+    return await this.makeRequest('GET', 'users', null, { context: 'edit' }, 'me');
+  }
+
+  // Search functionality
+  async searchContent(query, type = 'post') {
+    const params = {
+      search: query,
+      per_page: 20
+    };
+    
+    return await this.makeRequest('GET', type + 's', null, params);
+  }
+
+  // Main execution method
+  async execute(action, ...args) {
+    try {
+      switch (action.toLowerCase()) {
+        // Posts
+        case 'get_posts':
+        case 'list_posts':
+          return await this.getPosts(args[0] || {});
+        
+        case 'get_post':
+          if (!args[0]) throw new Error('Post ID is required');
+          return await this.getPost(args[0]);
+        
+        case 'create_post':
+          if (!args[0] || !args[1]) throw new Error('Title and content are required');
+          return await this.createPost(args[0], args[1], args[2], args[3], args[4]);
+        
+        case 'update_post':
+          if (!args[0] || !args[1]) throw new Error('Post ID and updates are required');
+          return await this.updatePost(args[0], args[1]);
+        
+        case 'delete_post':
+          if (!args[0]) throw new Error('Post ID is required');
+          return await this.deletePost(args[0]);
+
+        // Pages
+        case 'get_pages':
+        case 'list_pages':
+          return await this.getPages(args[0] || {});
+        
+        case 'create_page':
+          if (!args[0] || !args[1]) throw new Error('Title and content are required');
+          return await this.createPage(args[0], args[1], args[2], args[3]);
+
+        // Categories
+        case 'get_categories':
+        case 'list_categories':
+          return await this.getCategories(args[0] || {});
+        
+        case 'create_category':
+          if (!args[0]) throw new Error('Category name is required');
+          return await this.createCategory(args[0], args[1], args[2], args[3]);
+        
+        case 'update_category':
+          if (!args[0] || !args[1]) throw new Error('Category ID and updates are required');
+          return await this.updateCategory(args[0], args[1]);
+        
+        case 'delete_category':
+          if (!args[0]) throw new Error('Category ID is required');
+          return await this.deleteCategory(args[0]);
+
+        // Tags
+        case 'get_tags':
+        case 'list_tags':
+          return await this.getTags(args[0] || {});
+        
+        case 'create_tag':
+          if (!args[0]) throw new Error('Tag name is required');
+          return await this.createTag(args[0], args[1], args[2]);
+
+        // Comments
+        case 'get_comments':
+        case 'list_comments':
+          return await this.getComments(args[0] || {});
+        
+        case 'create_comment':
+          if (!args[0] || !args[1]) throw new Error('Post ID and content are required');
+          return await this.createComment(args[0], args[1], args[2], args[3]);
+        
+        case 'update_comment':
+          if (!args[0] || !args[1]) throw new Error('Comment ID and updates are required');
+          return await this.updateComment(args[0], args[1]);
+        
+        case 'delete_comment':
+          if (!args[0]) throw new Error('Comment ID is required');
+          return await this.deleteComment(args[0]);
+
+        // Media
+        case 'get_media':
+        case 'list_media':
+          return await this.getMedia(args[0] || {});
+        
+        case 'upload_media':
+          if (!args[0] || !args[1] || !args[2]) {
+            throw new Error('File buffer, filename, and MIME type are required');
+          }
+          return await this.uploadMedia(args[0], args[1], args[2], args[3], args[4]);
+
+        // Users
+        case 'get_users':
+        case 'list_users':
+          return await this.getUsers(args[0] || {});
+        
+        case 'get_current_user':
+        case 'me':
+          return await this.getCurrentUser();
+
+        // Search
+        case 'search':
+          if (!args[0]) throw new Error('Search query is required');
+          return await this.searchContent(args[0], args[1]);
+
+        default:
+          return {
+            success: false,
+            error: `Unknown action: ${action}. Available actions: get_posts, create_post, update_post, delete_post, get_categories, create_category, get_comments, get_media, upload_media, search, etc.`,
+            timestamp: new Date().toISOString()
+          };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
+    }
   }
 }
 
