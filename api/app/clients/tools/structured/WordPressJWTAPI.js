@@ -74,6 +74,10 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       if (action && action.toLowerCase() === 'check_user_capabilities') {
         return await this.checkUserCapabilities();
       }
+
+      if (action && action.toLowerCase() === 'test_correct_approach') {
+        return await this.testWithCorrectApproach();
+      }
       
       return await this.makeRequest(action, endpoint, data, params, id);
     } catch (error) {
@@ -137,7 +141,8 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       'delete_comment': 'DELETE',
       'get_comments': 'GET',
       'test_capabilities': 'test_capabilities',
-      'check_user_capabilities': 'check_user_capabilities'
+      'check_user_capabilities': 'check_user_capabilities',
+      'test_correct_approach': 'test_correct_approach'
     };
     
     return actionMap[action] || 'GET';
@@ -172,6 +177,10 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     
     if (lowerInput.includes('права') || lowerInput.includes('capabilities')) {
       return { action: 'check_user_capabilities', endpoint: '', data: {}, params: {}, id: null };
+    }
+
+    if (lowerInput.includes('correct_approach') || lowerInput.includes('правильный подход')) {
+      return { action: 'test_correct_approach', endpoint: '', data: {}, params: {}, id: null };
     }
     
     let action = 'GET';
@@ -261,13 +270,14 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     try {
       const token = await this.getJWTToken();
       
-      console.log('=== ПРОВЕРКА ПРАВ ПОЛЬЗОВАТЕЛЯ ===');
+      console.log('=== ПРОВЕРКА ПРАВ ПОЛЬЗОВАТЕЛЯ (ИСПРАВЛЕННАЯ) ===');
       
-      // Получаем информацию о текущем пользователе
-      const response = await axios.get(`${this.apiUrl}/wp-json/wp/v2/users/me`, {
+      // КРИТИЧЕСКИ ВАЖНО: добавляем context=edit для получения capabilities
+      const response = await axios.get(`${this.apiUrl}/wp-json/wp/v2/users/me?context=edit`, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         timeout: 30000,
         httpsAgent: new https.Agent({
@@ -284,7 +294,9 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       
       console.log('Текущий пользователь:', userData.name);
       console.log('ID пользователя:', userData.id);
+      console.log('Username:', userData.username);
       console.log('Роли:', userData.roles);
+      console.log('Capabilities получены:', Object.keys(this.userCapabilities).length > 0);
       
       // Проверяем ключевые права для REST API
       const requiredCaps = {
@@ -317,7 +329,7 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       
       if (missingCaps.length > 0) {
         console.error('❌ Отсутствующие критические права:', missingCaps);
-        return `❌ ПРОБЛЕМА С ПРАВАМИ ДОСТУПА\n\nПользователь: ${userData.name}\nРоли: ${roles.join(', ')}\n\nОтсутствующие права:\n${missingCaps.map(cap => `- ${requiredCaps[cap]} (${cap})`).join('\n')}\n\n🔧 РЕШЕНИЕ: Назначьте пользователю роль Administrator или Editor в WordPress админке.`;
+        return `❌ ПРОБЛЕМА С ПРАВАМИ ДОСТУПА\n\nПользователь: ${userData.name}\nРоли: ${roles.join(', ')}\n\nОтсутствующие права:\n${missingCaps.map(cap => `- ${requiredCaps[cap]} (${cap})`).join('\n')}\n\n🔧 РЕШЕНИЕ: Проверьте context=edit в запросе или права пользователя в WordPress.`;
       }
       
       return `✅ ПРАВА ДОСТУПА В ПОРЯДКЕ\n\nПользователь: ${userData.name}\nРоли: ${roles.join(', ')}\n\nВсе необходимые права присутствуют:\n${capabilityReport.join('\n')}`;
@@ -326,10 +338,105 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       console.error('Ошибка проверки прав:', error.response?.data || error.message);
       
       if (error.response?.status === 403) {
-        return `❌ ОШИБКА ДОСТУПА: Не удается получить информацию о пользователе. Проверьте права доступа к /wp-json/wp/v2/users/me`;
+        return `❌ ОШИБКА ДОСТУПА: Не удается получить информацию о пользователе. Проверьте права доступа к /wp-json/wp/v2/users/me?context=edit`;
       }
       
       return `❌ Ошибка проверки прав: ${error.response?.data?.message || error.message}`;
+    }
+  }
+
+  async testWithCorrectApproach() {
+    console.log('=== ТЕСТ С ПРАВИЛЬНЫМ ПОДХОДОМ ===');
+    
+    try {
+      const token = await this.getJWTToken();
+      console.log('✅ Токен получен');
+      
+      // Тест 1: Получаем информацию о себе с context=edit
+      const meResponse = await axios.get(`${this.apiUrl}/wp-json/wp/v2/users/me?context=edit`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 30000,
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false,
+          keepAlive: true
+        }),
+        httpAgent: new http.Agent({
+          keepAlive: true
+        })
+      });
+      
+      console.log('=== ДАННЫЕ ПОЛЬЗОВАТЕЛЯ ===');
+      console.log('ID:', meResponse.data.id);
+      console.log('Username:', meResponse.data.username);
+      console.log('Name:', meResponse.data.name);
+      console.log('Роли:', meResponse.data.roles);
+      console.log('Capabilities присутствуют:', !!meResponse.data.capabilities);
+      
+      let result = `✅ ДАННЫЕ ПОЛЬЗОВАТЕЛЯ ПОЛУЧЕНЫ:\n`;
+      result += `ID: ${meResponse.data.id}\n`;
+      result += `Username: ${meResponse.data.username}\n`;
+      result += `Name: ${meResponse.data.name}\n`;
+      result += `Роли: ${meResponse.data.roles?.join(', ') || 'не определены'}\n`;
+      
+      if (meResponse.data.capabilities) {
+        console.log('✅ Capabilities получены!');
+        console.log('publish_posts:', meResponse.data.capabilities.publish_posts);
+        console.log('edit_posts:', meResponse.data.capabilities.edit_posts);
+        console.log('manage_categories:', meResponse.data.capabilities.manage_categories);
+        
+        result += `\n✅ CAPABILITIES ПОЛУЧЕНЫ:\n`;
+        result += `- publish_posts: ${meResponse.data.capabilities.publish_posts}\n`;
+        result += `- edit_posts: ${meResponse.data.capabilities.edit_posts}\n`;
+        result += `- manage_categories: ${meResponse.data.capabilities.manage_categories}\n`;
+        result += `- upload_files: ${meResponse.data.capabilities.upload_files}\n`;
+        
+        // Тест 2: Пробуем создать черновик
+        try {
+          const draftPost = await axios.post(`${this.apiUrl}/wp-json/wp/v2/posts`, {
+            title: 'LibreChat Test Draft',
+            content: 'Тестовый пост из LibreChat с исправленным кодом',
+            status: 'draft'
+          }, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            timeout: 30000,
+            httpsAgent: new https.Agent({
+              rejectUnauthorized: false,
+              keepAlive: true
+            }),
+            httpAgent: new http.Agent({
+              keepAlive: true
+            })
+          });
+          
+          console.log('✅ Черновик создан! ID:', draftPost.data.id);
+          result += `\n✅ ТЕСТ СОЗДАНИЯ ПОСТА УСПЕШЕН!\n`;
+          result += `ID созданного поста: ${draftPost.data.id}\n`;
+          result += `Заголовок: ${draftPost.data.title.rendered}\n`;
+          result += `Статус: ${draftPost.data.status}\n`;
+          
+        } catch (createError) {
+          console.error('❌ Ошибка создания поста:', createError.response?.data);
+          result += `\n❌ ОШИБКА СОЗДАНИЯ ПОСТА:\n`;
+          result += `${createError.response?.data?.message || createError.message}\n`;
+        }
+        
+      } else {
+        result += `\n❌ Capabilities НЕ получены - проблема с context=edit\n`;
+      }
+      
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Ошибка теста:', error.response?.status, error.response?.data);
+      return `❌ Ошибка теста: ${error.response?.data?.message || error.message}`;
     }
   }
 
@@ -344,8 +451,8 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       const token = await this.getJWTToken();
       results.push('✅ JWT токен получен успешно');
       
-      // 2. Проверяем права пользователя
-      results.push('\n🔍 Проверка прав пользователя...');
+      // 2. Проверяем права пользователя (исправленная версия)
+      results.push('\n🔍 Проверка прав пользователя (с context=edit)...');
       const capResult = await this.checkUserCapabilities();
       results.push(capResult);
       
