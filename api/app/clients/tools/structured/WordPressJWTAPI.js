@@ -8,19 +8,34 @@ class WordPressJWTAPI extends Tool {
     super();
     
     this.name = 'wordpress_jwt_api';
-    this.description = `WordPress REST API tool with JWT authentication for comprehensive content management. Can create, read, update, and delete posts, pages, categories, tags, media, users, and comments. Automatically handles JWT token refresh and provides detailed capability diagnostics.
+    this.description = `WordPress REST API tool with JWT authentication for comprehensive content management.
 
-Available operations:
-- Posts: get_posts, create_post, update_post, delete_post
-- Pages: get_pages, create_page, update_page, delete_page  
-- Categories: get_categories, create_category, update_category, delete_category
-- Tags: get_tags, create_tag, update_tag, delete_tag
-- Comments: get_comments, create_comment, update_comment, delete_comment
-- Media: get_media, upload_media
-- Users: get_users, get_current_user
-- Diagnostics: test_capabilities, check_user_capabilities
+🎯 ОБЯЗАТЕЛЬНЫЕ ФОРМАТЫ ЗАПРОСОВ:
 
-Input format: JSON string with action, endpoint, data, params, and id fields, or natural language description.`;
+📝 СОЗДАНИЕ ПОСТА (ОБЯЗАТЕЛЬНО):
+{"action":"create_post","data":{"title":"Заголовок поста","content":"Содержимое поста","status":"draft"}}
+
+📂 СОЗДАНИЕ КАТЕГОРИИ:
+{"action":"create_category","data":{"name":"Название категории","description":"Описание"}}
+
+💬 СОЗДАНИЕ КОММЕНТАРИЯ:
+{"action":"create_comment","data":{"post":123,"content":"Текст комментария"}}
+
+✏️ РЕДАКТИРОВАНИЕ ПОСТА:
+{"action":"update_post","data":{"id":123,"title":"Новый заголовок","content":"Новое содержимое"}}
+
+📖 ПОЛУЧЕНИЕ ПОСТОВ:
+{"action":"get_posts","params":{"per_page":5}}
+
+⚠️ КРИТИЧЕСКИ ВАЖНО:
+- Всегда используйте JSON формат с полями "action" и "data"
+- Для создания поста ОБЯЗАТЕЛЬНЫ поля "title" и "content"
+- НЕ используйте естественный язык - только JSON!
+
+🚫 НЕПРАВИЛЬНО: "Создать пост о котиках"
+✅ ПРАВИЛЬНО: {"action":"create_post","data":{"title":"Котики","content":"Текст о котиках"}}
+
+Available operations: get_posts, create_post, update_post, delete_post, get_categories, create_category, get_comments, create_comment, test_capabilities`;
 
     // Получаем данные с приоритетом: fields -> env
     this.apiUrl = fields.WORDPRESS_API_URL || this.getEnvVariable('WORDPRESS_API_URL');
@@ -63,6 +78,11 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       console.log('=== ОБРАБОТКА ВХОДНЫХ ДАННЫХ ===');
       console.log('Входные данные:', input);
       
+      // КРИТИЧЕСКАЯ ПРОВЕРКА: отклоняем естественный язык без JSON
+      if (!this.isValidJSONInput(input)) {
+        return this.getFormatHelp(input);
+      }
+      
       const parsedInput = this.parseInput(input);
       console.log('Распарсенные данные:', JSON.stringify(parsedInput, null, 2));
       
@@ -93,6 +113,52 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       console.error('Ошибка в _call:', error);
       return `Ошибка: ${error.message}`;
     }
+  }
+
+  isValidJSONInput(input) {
+    // Проверяем, является ли входной параметр валидным JSON с action
+    try {
+      const parsed = JSON.parse(input);
+      return parsed.action || parsed.input;
+    } catch {
+      // Разрешаем только специальные команды диагностики
+      const lowerInput = input.toLowerCase();
+      return lowerInput.includes('test_capabilities') || 
+             lowerInput.includes('check_user_capabilities') ||
+             lowerInput.includes('диагностика');
+    }
+  }
+
+  getFormatHelp(input) {
+    const lowerInput = input.toLowerCase();
+    
+    let suggestion = '';
+    if (lowerInput.includes('пост') || lowerInput.includes('статью')) {
+      suggestion = `{"action":"create_post","data":{"title":"Заголовок вашего поста","content":"Содержимое поста","status":"draft"}}`;
+    } else if (lowerInput.includes('категор')) {
+      suggestion = `{"action":"create_category","data":{"name":"Название категории","description":"Описание категории"}}`;
+    } else if (lowerInput.includes('комментар')) {
+      suggestion = `{"action":"create_comment","data":{"post":ID_ПОСТА,"content":"Текст комментария"}}`;
+    } else {
+      suggestion = `{"action":"get_posts","params":{"per_page":5}}`;
+    }
+
+    return `❌ НЕПРАВИЛЬНЫЙ ФОРМАТ ЗАПРОСА
+
+🚫 Получен: "${input}"
+
+✅ ИСПОЛЬЗУЙТЕ ТОЛЬКО JSON ФОРМАТ:
+
+${suggestion}
+
+📋 ДОСТУПНЫЕ ДЕЙСТВИЯ:
+- create_post: Создание поста
+- get_posts: Получение постов  
+- create_category: Создание категории
+- create_comment: Создание комментария
+- update_post: Редактирование поста
+
+⚠️ ВАЖНО: Естественный язык НЕ поддерживается. Только JSON!`;
   }
 
   parseInput(input) {
@@ -261,67 +327,6 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
   }
 
   parseTextInput(input) {
-    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Поддержка формата "action, {json_data}" И "action: {json_data}"
-    const actionDataMatchComma = input.match(/^(\w+),\s*(\{.*\})$/);
-    const actionDataMatchColon = input.match(/^(\w+):\s*(\{.*\})$/);
-    
-    const actionDataMatch = actionDataMatchComma || actionDataMatchColon;
-    
-    if (actionDataMatch) {
-      const [, actionText, jsonData] = actionDataMatch;
-      console.log(`Найден формат "action: json" - действие: ${actionText}, данные: ${jsonData}`);
-      
-      try {
-        const data = JSON.parse(jsonData);
-        return {
-          action: this.mapActionToMethod(actionText),
-          endpoint: this.mapActionToEndpoint(actionText),
-          data: data,
-          params: {},
-          id: data.id || null
-        };
-      } catch (e) {
-        console.error('Ошибка парсинга JSON в тексте:', e);
-        return {
-          action: 'GET',
-          endpoint: '/posts',
-          data: {},
-          params: {},
-          id: null
-        };
-      }
-    }
-
-    // НОВОЕ: Обработка комментариев в естественном языке
-    // Пример: "Создайте комментарий к посту про notebook lm с ID 1: \"текст комментария\""
-    const commentMatch = input.match(/(?:создай|добавь|напиш).*?комментарий.*?(?:к\s+посту.*?)?(?:с\s+)?id[:\s]*(\d+)[:\s]*[\"\'](.*?)[\"\']/i);
-    if (commentMatch) {
-      const [, postId, content] = commentMatch;
-      console.log(`Найден комментарий: пост ${postId}, контент: ${content}`);
-      return {
-        action: 'POST',
-        endpoint: '/comments',
-        data: { post: parseInt(postId), content: content },
-        params: {},
-        id: null
-      };
-    }
-    
-    // НОВОЕ: Обработка обновления постов в естественном языке
-    // Пример: "Обновить пост с ID 1506, добавив текст: \"новый текст\""
-    const updateMatch = input.match(/(?:обнови|измени|редактируй).*?пост.*?(?:с\s+)?id[:\s]*(\d+).*?(?:добавив\s+)?текст[:\s]*[\"\'](.*?)[\"\']/i);
-    if (updateMatch) {
-      const [, postId, additionalText] = updateMatch;
-      console.log(`Найдено обновление поста: ID ${postId}, текст: ${additionalText}`);
-      return {
-        action: 'PUT',
-        endpoint: '/posts',
-        data: { content: additionalText },
-        params: {},
-        id: parseInt(postId)
-      };
-    }
-
     const lowerInput = input.toLowerCase();
     
     // Проверяем специальные команды
@@ -337,55 +342,48 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       return { action: 'test_correct_approach', endpoint: '', data: {}, params: {}, id: null };
     }
     
-    // Определяем действие из текста
-    let action = 'GET';
-    if (lowerInput.includes('создай') || lowerInput.includes('добавь') || lowerInput.includes('новый') || lowerInput.includes('create')) {
-      action = 'POST';
-    } else if (lowerInput.includes('обнови') || lowerInput.includes('измени') || lowerInput.includes('редактируй') || lowerInput.includes('update')) {
-      action = 'PUT';
-    } else if (lowerInput.includes('удали') || lowerInput.includes('убери') || lowerInput.includes('delete')) {
-      action = 'DELETE';
-    }
-
-    // Определяем endpoint
-    let endpoint = '/posts';
-    if (lowerInput.includes('страниц') || lowerInput.includes('page')) endpoint = '/pages';
-    else if (lowerInput.includes('категор') || lowerInput.includes('categor')) endpoint = '/categories';
-    else if (lowerInput.includes('тег') || lowerInput.includes('метк') || lowerInput.includes('tag')) endpoint = '/tags';
-    else if (lowerInput.includes('пользовател') || lowerInput.includes('user')) endpoint = '/users';
-    else if (lowerInput.includes('медиа') || lowerInput.includes('изображен') || lowerInput.includes('файл') || lowerInput.includes('media')) endpoint = '/media';
-    else if (lowerInput.includes('комментар') || lowerInput.includes('comment')) endpoint = '/comments';
-
-    const idMatch = input.match(/id[:\s]*(\d+)/i);
-    const id = idMatch ? idMatch[1] : null;
-
-    return { action, endpoint, data: {}, params: {}, id };
+    // Для всех остальных случаев возвращаем GET запрос
+    return { action: 'GET', endpoint: '/posts', data: {}, params: {}, id: null };
   }
 
-  // ИСПРАВЛЕННАЯ валидация данных
+  // УЛУЧШЕННАЯ валидация данных с детальными сообщениями
   validatePostData(data) {
     console.log('=== ВАЛИДАЦИЯ ДАННЫХ ПОСТА ===');
     console.log('Проверяемые данные:', JSON.stringify(data, null, 2));
     
-    // WordPress требует хотя бы title или content
     if (!data || typeof data !== 'object') {
-      throw new Error('Данные поста должны быть объектом');
+      throw new Error(`Данные поста должны быть объектом. 
+
+✅ ПРАВИЛЬНЫЙ ФОРМАТ:
+{"action":"create_post","data":{"title":"Заголовок","content":"Содержимое","status":"draft"}}`);
     }
     
     if (!data.title && !data.content) {
-      throw new Error('Необходимо указать title или content для создания поста');
+      throw new Error(`Необходимо указать title или content для создания поста.
+
+❌ ОТСУТСТВУЮТ ОБЯЗАТЕЛЬНЫЕ ПОЛЯ:
+- title (заголовок поста)
+- content (содержимое поста)
+
+✅ ПРАВИЛЬНЫЙ ПРИМЕР:
+{"action":"create_post","data":{"title":"Мой заголовок","content":"Содержимое поста","status":"draft"}}`);
     }
     
-    // Убеждаемся что строки не пустые
     if (data.title !== undefined) {
       if (typeof data.title !== 'string' || data.title.trim().length === 0) {
-        throw new Error('Title не может быть пустой строкой');
+        throw new Error(`Title не может быть пустой строкой.
+
+✅ ПРАВИЛЬНО: "title":"Заголовок поста"
+❌ НЕПРАВИЛЬНО: "title":"" или "title":null`);
       }
     }
     
     if (data.content !== undefined) {
       if (typeof data.content !== 'string' || data.content.trim().length === 0) {
-        throw new Error('Content не может быть пустой строкой');
+        throw new Error(`Content не может быть пустой строкой.
+
+✅ ПРАВИЛЬНО: "content":"Содержимое поста"
+❌ НЕПРАВИЛЬНО: "content":"" или "content":null`);
       }
     }
     
@@ -398,34 +396,152 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     console.log('Проверяемые данные:', JSON.stringify(data, null, 2));
     
     if (!data || typeof data !== 'object') {
-      throw new Error('Данные категории должны быть объектом');
+      throw new Error(`Данные категории должны быть объектом.
+
+✅ ПРАВИЛЬНЫЙ ФОРМАТ:
+{"action":"create_category","data":{"name":"Название категории","description":"Описание"}}`);
     }
     
     if (!data.name || typeof data.name !== 'string' || data.name.trim().length === 0) {
-      throw new Error('Необходимо указать непустое name для создания категории');
+      throw new Error(`Необходимо указать непустое name для создания категории.
+
+❌ ОТСУТСТВУЕТ ОБЯЗАТЕЛЬНОЕ ПОЛЕ: name
+
+✅ ПРАВИЛЬНЫЙ ПРИМЕР:
+{"action":"create_category","data":{"name":"Моя категория","description":"Описание категории"}}`);
     }
     
     console.log('✅ Валидация данных категории прошла успешно');
     return true;
   }
 
-  validateCommentData(data) {
+  async validateCommentData(data) {
     console.log('=== ВАЛИДАЦИЯ ДАННЫХ КОММЕНТАРИЯ ===');
     console.log('Проверяемые данные:', JSON.stringify(data, null, 2));
     
     if (!data || typeof data !== 'object') {
-      throw new Error('Данные комментария должны быть объектом');
+      throw new Error(`Данные комментария должны быть объектом.
+
+✅ ПРАВИЛЬНЫЙ ФОРМАТ:
+{"action":"create_comment","data":{"post":123,"content":"Текст комментария"}}`);
     }
     
-    if (!data.post && !data.post_id) {
-      throw new Error('Необходимо указать post или post_id для создания комментария');
+    const postId = data.post || data.post_id;
+    if (!postId) {
+      throw new Error(`Необходимо указать post или post_id для создания комментария.
+
+❌ ОТСУТСТВУЕТ ОБЯЗАТЕЛЬНОЕ ПОЛЕ: post
+
+✅ ПРАВИЛЬНЫЙ ПРИМЕР:
+{"action":"create_comment","data":{"post":123,"content":"Мой комментарий"}}`);
     }
+    
     if (!data.content || typeof data.content !== 'string' || data.content.trim().length === 0) {
-      throw new Error('Необходимо указать непустой content для комментария');
+      throw new Error(`Необходимо указать непустой content для комментария.
+
+❌ ОТСУТСТВУЕТ ОБЯЗАТЕЛЬНОЕ ПОЛЕ: content
+
+✅ ПРАВИЛЬНЫЙ ПРИМЕР:
+{"action":"create_comment","data":{"post":123,"content":"Интересная статья!"}}`);
+    }
+    
+    // НОВОЕ: Проверяем существование поста и разрешены ли комментарии
+    console.log(`Проверяем пост ID ${postId}...`);
+    const postCheck = await this.checkPostExists(postId);
+    
+    if (!postCheck.exists) {
+      throw new Error(`Пост с ID ${postId} не найден.
+
+🔧 РЕШЕНИЯ:
+1. Проверьте правильность ID поста
+2. Используйте {"action":"get_posts"} для получения списка доступных постов`);
+    }
+    
+    if (postCheck.commentStatus === 'closed') {
+      // Получаем список постов с открытыми комментариями
+      const commentablePosts = await this.findCommentablePosts();
+      const suggestions = commentablePosts.slice(0, 3).map(post => 
+        `ID: ${post.id} - "${post.title}"`
+      ).join('\n');
+      
+      throw new Error(`Комментарии к посту "${postCheck.title}" (ID: ${postId}) закрыты для обсуждения.
+
+🔧 ВЫБЕРИТЕ ПОСТ С ОТКРЫТЫМИ КОММЕНТАРИЯМИ:
+
+${suggestions}
+
+✅ ИСПОЛЬЗУЙТЕ:
+{"action":"create_comment","data":{"post":ID_ПОСТА,"content":"Ваш комментарий"}}`);
     }
     
     console.log('✅ Валидация данных комментария прошла успешно');
+    console.log(`Комментарии к посту "${postCheck.title}" разрешены`);
     return true;
+  }
+
+  async checkPostExists(postId) {
+    try {
+      const token = await this.getJWTToken();
+      const response = await axios.get(`${this.apiUrl}/wp-json/wp/v2/posts/${postId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+        timeout: 10000,
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false,
+          keepAlive: true
+        }),
+        httpAgent: new http.Agent({
+          keepAlive: true
+        })
+      });
+      
+      return {
+        exists: true,
+        commentStatus: response.data.comment_status,
+        title: response.data.title.rendered
+      };
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return { exists: false, error: 'Пост не найден' };
+      }
+      return { exists: false, error: error.message };
+    }
+  }
+
+  async findCommentablePosts() {
+    try {
+      const token = await this.getJWTToken();
+      const response = await axios.get(`${this.apiUrl}/wp-json/wp/v2/posts`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+        params: {
+          per_page: 10,
+          comment_status: 'open',
+          status: 'publish'
+        },
+        timeout: 10000,
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false,
+          keepAlive: true
+        }),
+        httpAgent: new http.Agent({
+          keepAlive: true
+        })
+      });
+      
+      return response.data.map(post => ({
+        id: post.id,
+        title: post.title.rendered,
+        link: post.link
+      }));
+    } catch (error) {
+      console.error('Ошибка поиска постов для комментирования:', error);
+      return [];
+    }
   }
 
   async getJWTToken() {
@@ -721,7 +837,7 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       } else if (method === 'POST' && endpoint === '/categories') {
         this.validateCategoryData(data);
       } else if (method === 'POST' && endpoint === '/comments') {
-        this.validateCommentData(data);
+        await this.validateCommentData(data);
       }
     } catch (validationError) {
       return `❌ Ошибка валидации: ${validationError.message}`;
@@ -815,6 +931,22 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
 3. JWT плагин настроен правильно
 
 💡 Запустите диагностику: "test_capabilities"`;
+        }
+        
+        if (errorData.code === 'rest_comment_closed') {
+          const commentablePosts = await this.findCommentablePosts();
+          const suggestions = commentablePosts.slice(0, 3).map(post => 
+            `ID: ${post.id} - "${post.title}"`
+          ).join('\n');
+          
+          return `❌ Комментарии к этому посту закрыты для обсуждения.
+
+🔧 ВЫБЕРИТЕ ПОСТ С ОТКРЫТЫМИ КОММЕНТАРИЯМИ:
+
+${suggestions}
+
+✅ ИСПОЛЬЗУЙТЕ:
+{"action":"create_comment","data":{"post":ID_ПОСТА,"content":"Ваш комментарий"}}`;
         }
         
         if (errorData.code === 'rest_forbidden') {
