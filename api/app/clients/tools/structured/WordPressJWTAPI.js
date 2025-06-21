@@ -1058,4 +1058,3 @@ ${suggestions}
 }
 
 module.exports = WordPressJWTAPI;
-
