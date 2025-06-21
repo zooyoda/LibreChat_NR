@@ -68,6 +68,13 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       
       const { action, endpoint, data, params, id } = parsedInput;
       
+      // ДОБАВЛЯЕМ ОТЛАДКУ ДАННЫХ
+      console.log('=== ФИНАЛЬНЫЕ ПАРАМЕТРЫ ===');
+      console.log('Action (HTTP метод):', action);
+      console.log('Endpoint:', endpoint);
+      console.log('Data:', JSON.stringify(data, null, 2));
+      console.log('ID:', id);
+      
       // Специальная обработка для диагностических команд
       if (input.includes('test_capabilities') || action === 'test_capabilities') {
         return await this.testCapabilities();
@@ -254,8 +261,12 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
   }
 
   parseTextInput(input) {
-    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обработка формата "action: {json_data}"
-    const actionDataMatch = input.match(/^(\w+):\s*(\{.*\})$/);
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Поддержка формата "action, {json_data}" И "action: {json_data}"
+    const actionDataMatchComma = input.match(/^(\w+),\s*(\{.*\})$/);
+    const actionDataMatchColon = input.match(/^(\w+):\s*(\{.*\})$/);
+    
+    const actionDataMatch = actionDataMatchComma || actionDataMatchColon;
+    
     if (actionDataMatch) {
       const [, actionText, jsonData] = actionDataMatch;
       console.log(`Найден формат "action: json" - действие: ${actionText}, данные: ${jsonData}`);
@@ -279,6 +290,36 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
           id: null
         };
       }
+    }
+
+    // НОВОЕ: Обработка комментариев в естественном языке
+    // Пример: "Создайте комментарий к посту про notebook lm с ID 1: \"текст комментария\""
+    const commentMatch = input.match(/(?:создай|добавь|напиш).*?комментарий.*?(?:к\s+посту.*?)?(?:с\s+)?id[:\s]*(\d+)[:\s]*[\"\'](.*?)[\"\']/i);
+    if (commentMatch) {
+      const [, postId, content] = commentMatch;
+      console.log(`Найден комментарий: пост ${postId}, контент: ${content}`);
+      return {
+        action: 'POST',
+        endpoint: '/comments',
+        data: { post: parseInt(postId), content: content },
+        params: {},
+        id: null
+      };
+    }
+    
+    // НОВОЕ: Обработка обновления постов в естественном языке
+    // Пример: "Обновить пост с ID 1506, добавив текст: \"новый текст\""
+    const updateMatch = input.match(/(?:обнови|измени|редактируй).*?пост.*?(?:с\s+)?id[:\s]*(\d+).*?(?:добавив\s+)?текст[:\s]*[\"\'](.*?)[\"\']/i);
+    if (updateMatch) {
+      const [, postId, additionalText] = updateMatch;
+      console.log(`Найдено обновление поста: ID ${postId}, текст: ${additionalText}`);
+      return {
+        action: 'PUT',
+        endpoint: '/posts',
+        data: { content: additionalText },
+        params: {},
+        id: parseInt(postId)
+      };
     }
 
     const lowerInput = input.toLowerCase();
@@ -321,39 +362,69 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     return { action, endpoint, data: {}, params: {}, id };
   }
 
-  // Новый метод валидации данных
+  // ИСПРАВЛЕННАЯ валидация данных
   validatePostData(data) {
+    console.log('=== ВАЛИДАЦИЯ ДАННЫХ ПОСТА ===');
+    console.log('Проверяемые данные:', JSON.stringify(data, null, 2));
+    
     // WordPress требует хотя бы title или content
+    if (!data || typeof data !== 'object') {
+      throw new Error('Данные поста должны быть объектом');
+    }
+    
     if (!data.title && !data.content) {
       throw new Error('Необходимо указать title или content для создания поста');
     }
     
     // Убеждаемся что строки не пустые
-    if (data.title && typeof data.title === 'string' && data.title.trim().length === 0) {
-      throw new Error('Title не может быть пустой строкой');
+    if (data.title !== undefined) {
+      if (typeof data.title !== 'string' || data.title.trim().length === 0) {
+        throw new Error('Title не может быть пустой строкой');
+      }
     }
     
-    if (data.content && typeof data.content === 'string' && data.content.trim().length === 0) {
-      throw new Error('Content не может быть пустой строкой');
+    if (data.content !== undefined) {
+      if (typeof data.content !== 'string' || data.content.trim().length === 0) {
+        throw new Error('Content не может быть пустой строкой');
+      }
     }
     
+    console.log('✅ Валидация данных поста прошла успешно');
     return true;
   }
 
   validateCategoryData(data) {
+    console.log('=== ВАЛИДАЦИЯ ДАННЫХ КАТЕГОРИИ ===');
+    console.log('Проверяемые данные:', JSON.stringify(data, null, 2));
+    
+    if (!data || typeof data !== 'object') {
+      throw new Error('Данные категории должны быть объектом');
+    }
+    
     if (!data.name || typeof data.name !== 'string' || data.name.trim().length === 0) {
       throw new Error('Необходимо указать непустое name для создания категории');
     }
+    
+    console.log('✅ Валидация данных категории прошла успешно');
     return true;
   }
 
   validateCommentData(data) {
+    console.log('=== ВАЛИДАЦИЯ ДАННЫХ КОММЕНТАРИЯ ===');
+    console.log('Проверяемые данные:', JSON.stringify(data, null, 2));
+    
+    if (!data || typeof data !== 'object') {
+      throw new Error('Данные комментария должны быть объектом');
+    }
+    
     if (!data.post && !data.post_id) {
       throw new Error('Необходимо указать post или post_id для создания комментария');
     }
     if (!data.content || typeof data.content !== 'string' || data.content.trim().length === 0) {
       throw new Error('Необходимо указать непустой content для комментария');
     }
+    
+    console.log('✅ Валидация данных комментария прошла успешно');
     return true;
   }
 
