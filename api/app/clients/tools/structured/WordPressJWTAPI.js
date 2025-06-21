@@ -12,8 +12,11 @@ class WordPressJWTAPI extends Tool {
 
 🎯 ОБЯЗАТЕЛЬНЫЕ ФОРМАТЫ ЗАПРОСОВ:
 
-📝 СОЗДАНИЕ ПОСТА (ОБЯЗАТЕЛЬНО):
+📝 СОЗДАНИЕ ПОСТА:
 {"action":"create_post","data":{"title":"Заголовок поста","content":"Содержимое поста","status":"draft"}}
+
+📄 СОЗДАНИЕ СТРАНИЦЫ:
+{"action":"create_page","data":{"title":"Заголовок страницы","content":"Содержимое страницы","status":"draft"}}
 
 📂 СОЗДАНИЕ КАТЕГОРИИ:
 {"action":"create_category","data":{"name":"Название категории","description":"Описание"}}
@@ -21,21 +24,25 @@ class WordPressJWTAPI extends Tool {
 💬 СОЗДАНИЕ КОММЕНТАРИЯ:
 {"action":"create_comment","data":{"post":123,"content":"Текст комментария"}}
 
+📖 ПОЛУЧЕНИЕ ПОСТОВ (с пагинацией):
+{"action":"get_posts","params":{"per_page":10,"page":1}}
+
+📄 ПОЛУЧЕНИЕ СТРАНИЦ:
+{"action":"get_pages","params":{"per_page":10,"page":1}}
+
+📂 ПОЛУЧЕНИЕ КАТЕГОРИЙ (с пагинацией):
+{"action":"get_categories","params":{"per_page":20,"page":1}}
+
 ✏️ РЕДАКТИРОВАНИЕ ПОСТА:
 {"action":"update_post","data":{"id":123,"title":"Новый заголовок","content":"Новое содержимое"}}
 
-📖 ПОЛУЧЕНИЕ ПОСТОВ:
-{"action":"get_posts","params":{"per_page":5}}
-
 ⚠️ КРИТИЧЕСКИ ВАЖНО:
 - Всегда используйте JSON формат с полями "action" и "data"
-- Для создания поста ОБЯЗАТЕЛЬНЫ поля "title" и "content"
+- Для постов используйте create_post, для страниц - create_page
+- Используйте params для пагинации: {"per_page":20,"page":2}
 - НЕ используйте естественный язык - только JSON!
 
-🚫 НЕПРАВИЛЬНО: "Создать пост о котиках"
-✅ ПРАВИЛЬНО: {"action":"create_post","data":{"title":"Котики","content":"Текст о котиках"}}
-
-Available operations: get_posts, create_post, update_post, delete_post, get_categories, create_category, get_comments, create_comment, test_capabilities`;
+Available operations: get_posts, create_post, update_post, delete_post, get_pages, create_page, update_page, delete_page, get_categories, create_category, get_comments, create_comment, test_capabilities`;
 
     // Получаем данные с приоритетом: fields -> env
     this.apiUrl = fields.WORDPRESS_API_URL || this.getEnvVariable('WORDPRESS_API_URL');
@@ -93,6 +100,7 @@ Available operations: get_posts, create_post, update_post, delete_post, get_cate
       console.log('Action (HTTP метод):', action);
       console.log('Endpoint:', endpoint);
       console.log('Data:', JSON.stringify(data, null, 2));
+      console.log('Params:', JSON.stringify(params, null, 2));
       console.log('ID:', id);
       
       // Специальная обработка для диагностических команд
@@ -135,12 +143,14 @@ Available operations: get_posts, create_post, update_post, delete_post, get_cate
     let suggestion = '';
     if (lowerInput.includes('пост') || lowerInput.includes('статью')) {
       suggestion = `{"action":"create_post","data":{"title":"Заголовок вашего поста","content":"Содержимое поста","status":"draft"}}`;
+    } else if (lowerInput.includes('страниц')) {
+      suggestion = `{"action":"create_page","data":{"title":"Заголовок страницы","content":"Содержимое страницы","status":"draft"}}`;
     } else if (lowerInput.includes('категор')) {
-      suggestion = `{"action":"create_category","data":{"name":"Название категории","description":"Описание категории"}}`;
+      suggestion = `{"action":"get_categories","params":{"per_page":20,"page":1}}`;
     } else if (lowerInput.includes('комментар')) {
       suggestion = `{"action":"create_comment","data":{"post":ID_ПОСТА,"content":"Текст комментария"}}`;
     } else {
-      suggestion = `{"action":"get_posts","params":{"per_page":5}}`;
+      suggestion = `{"action":"get_posts","params":{"per_page":10,"page":1}}`;
     }
 
     return `❌ НЕПРАВИЛЬНЫЙ ФОРМАТ ЗАПРОСА
@@ -153,10 +163,15 @@ ${suggestion}
 
 📋 ДОСТУПНЫЕ ДЕЙСТВИЯ:
 - create_post: Создание поста
-- get_posts: Получение постов  
+- create_page: Создание страницы  
+- get_posts: Получение постов
+- get_pages: Получение страниц
+- get_categories: Получение категорий (с пагинацией)
 - create_category: Создание категории
 - create_comment: Создание комментария
 - update_post: Редактирование поста
+
+💡 ПАГИНАЦИЯ: Используйте params: {"per_page":20,"page":2}
 
 ⚠️ ВАЖНО: Естественный язык НЕ поддерживается. Только JSON!`;
   }
@@ -210,7 +225,7 @@ ${suggestion}
     }
   }
 
-  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: правильный маппинг действий на HTTP методы
+  // ИСПРАВЛЕННЫЙ маппинг действий на HTTP методы
   mapActionToMethod(action) {
     const actionMap = {
       // Posts
@@ -220,7 +235,7 @@ ${suggestion}
       'update_post': 'PUT',
       'delete_post': 'DELETE',
       
-      // Pages
+      // Pages - ИСПРАВЛЕНО
       'get_pages': 'GET',
       'list_pages': 'GET',
       'create_page': 'POST',
@@ -268,7 +283,7 @@ ${suggestion}
     return actionMap[action] || 'GET';
   }
 
-  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: правильный маппинг действий на эндпоинты
+  // ИСПРАВЛЕННЫЙ маппинг действий на эндпоинты
   mapActionToEndpoint(action) {
     const endpointMap = {
       // Posts
@@ -278,7 +293,7 @@ ${suggestion}
       'update_post': '/posts',
       'delete_post': '/posts',
       
-      // Pages
+      // Pages - ИСПРАВЛЕНО
       'get_pages': '/pages',
       'list_pages': '/pages',
       'create_page': '/pages',
@@ -346,7 +361,7 @@ ${suggestion}
     return { action: 'GET', endpoint: '/posts', data: {}, params: {}, id: null };
   }
 
-  // УЛУЧШЕННАЯ валидация данных с детальными сообщениями
+  // УЛУЧШЕННАЯ валидация данных
   validatePostData(data) {
     console.log('=== ВАЛИДАЦИЯ ДАННЫХ ПОСТА ===');
     console.log('Проверяемые данные:', JSON.stringify(data, null, 2));
@@ -388,6 +403,33 @@ ${suggestion}
     }
     
     console.log('✅ Валидация данных поста прошла успешно');
+    return true;
+  }
+
+  // НОВАЯ валидация для страниц
+  validatePageData(data) {
+    console.log('=== ВАЛИДАЦИЯ ДАННЫХ СТРАНИЦЫ ===');
+    console.log('Проверяемые данные:', JSON.stringify(data, null, 2));
+    
+    if (!data || typeof data !== 'object') {
+      throw new Error(`Данные страницы должны быть объектом.
+
+✅ ПРАВИЛЬНЫЙ ФОРМАТ:
+{"action":"create_page","data":{"title":"Заголовок страницы","content":"Содержимое страницы","status":"draft"}}`);
+    }
+    
+    if (!data.title && !data.content) {
+      throw new Error(`Необходимо указать title или content для создания страницы.
+
+❌ ОТСУТСТВУЮТ ОБЯЗАТЕЛЬНЫЕ ПОЛЯ:
+- title (заголовок страницы)
+- content (содержимое страницы)
+
+✅ ПРАВИЛЬНЫЙ ПРИМЕР:
+{"action":"create_page","data":{"title":"О нас","content":"Информация о компании","status":"draft"}}`);
+    }
+    
+    console.log('✅ Валидация данных страницы прошла успешно');
     return true;
   }
 
@@ -454,7 +496,7 @@ ${suggestion}
 
 🔧 РЕШЕНИЯ:
 1. Проверьте правильность ID поста
-2. Используйте {"action":"get_posts"} для получения списка доступных постов`);
+2. Используйте {"action":"get_posts","params":{"per_page":10}} для получения списка доступных постов`);
     }
     
     if (postCheck.commentStatus === 'closed') {
@@ -642,6 +684,8 @@ ${suggestions}
         'edit_posts': 'Редактирование постов',
         'edit_others_posts': 'Редактирование чужих постов',
         'delete_posts': 'Удаление постов',
+        'publish_pages': 'Публикация страниц',
+        'edit_pages': 'Редактирование страниц',
         'manage_categories': 'Управление категориями',
         'upload_files': 'Загрузка файлов',
         'read': 'Чтение контента'
@@ -724,18 +768,20 @@ ${suggestions}
         console.log('✅ Capabilities получены!');
         console.log('publish_posts:', meResponse.data.capabilities.publish_posts);
         console.log('edit_posts:', meResponse.data.capabilities.edit_posts);
+        console.log('publish_pages:', meResponse.data.capabilities.publish_pages);
         console.log('manage_categories:', meResponse.data.capabilities.manage_categories);
         
         result += `\n✅ CAPABILITIES ПОЛУЧЕНЫ:\n`;
         result += `- publish_posts: ${meResponse.data.capabilities.publish_posts}\n`;
         result += `- edit_posts: ${meResponse.data.capabilities.edit_posts}\n`;
+        result += `- publish_pages: ${meResponse.data.capabilities.publish_pages}\n`;
         result += `- manage_categories: ${meResponse.data.capabilities.manage_categories}\n`;
         result += `- upload_files: ${meResponse.data.capabilities.upload_files}\n`;
         
-        // Тест 2: Пробуем создать черновик
+        // Тест 2: Пробуем создать черновик поста
         try {
           const draftPost = await axios.post(`${this.apiUrl}/wp-json/wp/v2/posts`, {
-            title: 'LibreChat Test Draft',
+            title: 'LibreChat Test Draft Post',
             content: 'Тестовый пост из LibreChat с исправленным кодом',
             status: 'draft'
           }, {
@@ -754,7 +800,7 @@ ${suggestions}
             })
           });
           
-          console.log('✅ Черновик создан! ID:', draftPost.data.id);
+          console.log('✅ Черновик поста создан! ID:', draftPost.data.id);
           result += `\n✅ ТЕСТ СОЗДАНИЯ ПОСТА УСПЕШЕН!\n`;
           result += `ID созданного поста: ${draftPost.data.id}\n`;
           result += `Заголовок: ${draftPost.data.title.rendered}\n`;
@@ -763,6 +809,40 @@ ${suggestions}
         } catch (createError) {
           console.error('❌ Ошибка создания поста:', createError.response?.data);
           result += `\n❌ ОШИБКА СОЗДАНИЯ ПОСТА:\n`;
+          result += `${createError.response?.data?.message || createError.message}\n`;
+        }
+
+        // Тест 3: Пробуем создать черновик страницы
+        try {
+          const draftPage = await axios.post(`${this.apiUrl}/wp-json/wp/v2/pages`, {
+            title: 'LibreChat Test Draft Page',
+            content: 'Тестовая страница из LibreChat с исправленным кодом',
+            status: 'draft'
+          }, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            timeout: 30000,
+            httpsAgent: new https.Agent({
+              rejectUnauthorized: false,
+              keepAlive: true
+            }),
+            httpAgent: new http.Agent({
+              keepAlive: true
+            })
+          });
+          
+          console.log('✅ Черновик страницы создан! ID:', draftPage.data.id);
+          result += `\n✅ ТЕСТ СОЗДАНИЯ СТРАНИЦЫ УСПЕШЕН!\n`;
+          result += `ID созданной страницы: ${draftPage.data.id}\n`;
+          result += `Заголовок: ${draftPage.data.title.rendered}\n`;
+          result += `Статус: ${draftPage.data.status}\n`;
+          
+        } catch (createError) {
+          console.error('❌ Ошибка создания страницы:', createError.response?.data);
+          result += `\n❌ ОШИБКА СОЗДАНИЯ СТРАНИЦЫ:\n`;
           result += `${createError.response?.data?.message || createError.message}\n`;
         }
         
@@ -801,19 +881,36 @@ ${suggestions}
       
       // 4. Тестируем создание черновика (если есть права)
       if (this.userCapabilities && this.userCapabilities['edit_posts']) {
-        results.push('\n🔍 Тестирование создания черновика...');
+        results.push('\n🔍 Тестирование создания черновика поста...');
         try {
           const testPost = await this.makeRequest('POST', '/posts', {
             title: 'Тестовый пост от LibreChat',
             content: 'Этот пост создан для тестирования API. Можно удалить.',
             status: 'draft'
           });
-          results.push('✅ Создание черновика работает');
+          results.push('✅ Создание черновика поста работает');
         } catch (createError) {
           results.push(`❌ Ошибка создания поста: ${createError.message}`);
         }
       } else {
-        results.push('\n⚠️ Пропуск теста создания - нет прав edit_posts');
+        results.push('\n⚠️ Пропуск теста создания поста - нет прав edit_posts');
+      }
+
+      // 5. Тестируем создание страницы (если есть права)
+      if (this.userCapabilities && this.userCapabilities['edit_pages']) {
+        results.push('\n🔍 Тестирование создания черновика страницы...');
+        try {
+          const testPage = await this.makeRequest('POST', '/pages', {
+            title: 'Тестовая страница от LibreChat',
+            content: 'Эта страница создана для тестирования API. Можно удалить.',
+            status: 'draft'
+          });
+          results.push('✅ Создание черновика страницы работает');
+        } catch (createError) {
+          results.push(`❌ Ошибка создания страницы: ${createError.message}`);
+        }
+      } else {
+        results.push('\n⚠️ Пропуск теста создания страницы - нет прав edit_pages');
       }
       
       results.push('\n=== ДИАГНОСТИКА ЗАВЕРШЕНА ===');
@@ -834,6 +931,8 @@ ${suggestions}
     try {
       if (method === 'POST' && endpoint === '/posts') {
         this.validatePostData(data);
+      } else if (method === 'POST' && endpoint === '/pages') {
+        this.validatePageData(data);
       } else if (method === 'POST' && endpoint === '/categories') {
         this.validateCategoryData(data);
       } else if (method === 'POST' && endpoint === '/comments') {
@@ -867,6 +966,16 @@ ${suggestions}
       delete data.post_id;
     }
 
+    // ИСПРАВЛЕНИЕ: Устанавливаем значения по умолчанию для пагинации
+    if (method === 'GET' && Object.keys(params).length === 0) {
+      // Для категорий увеличиваем лимит по умолчанию
+      if (endpoint === '/categories') {
+        params.per_page = 50; // Показываем больше категорий
+      } else {
+        params.per_page = 10; // Для остальных типов контента
+      }
+    }
+
     const config = {
       method,
       url,
@@ -895,12 +1004,15 @@ ${suggestions}
 
     try {
       console.log(`Отправляем ${method} запрос к: ${url}`);
-      console.log('Данные:', JSON.stringify(data, null, 2));
+      console.log('Параметры:', JSON.stringify(params, null, 2));
+      if (Object.keys(data).length > 0) {
+        console.log('Данные:', JSON.stringify(data, null, 2));
+      }
       
       const response = await axios(config);
       console.log('Запрос выполнен успешно, статус:', response.status);
       
-      return this.formatResponse(response.data, method, endpoint, id);
+      return this.formatResponse(response.data, method, endpoint, id, response.headers);
     } catch (error) {
       console.error('Ошибка запроса:', error.response?.status, error.response?.data);
       
@@ -913,7 +1025,7 @@ ${suggestions}
           const newToken = await this.getJWTToken();
           config.headers['Authorization'] = `Bearer ${newToken}`;
           const retryResponse = await axios(config);
-          return this.formatResponse(retryResponse.data, method, endpoint, id);
+          return this.formatResponse(retryResponse.data, method, endpoint, id, retryResponse.headers);
         } catch (retryError) {
           return `Ошибка аутентификации: ${retryError.message}`;
         }
@@ -1006,29 +1118,56 @@ ${suggestions}
     }
   }
 
-  formatResponse(data, method, endpoint, id) {
+  // ИСПРАВЛЕННЫЙ formatResponse с поддержкой пагинации
+  formatResponse(data, method, endpoint, id, headers = {}) {
     if (Array.isArray(data)) {
       const itemType = this.getItemType(endpoint);
-      const items = data.slice(0, 5).map(item => ({
+      
+      // Получаем информацию о пагинации из заголовков
+      const totalItems = headers['x-wp-total'] ? parseInt(headers['x-wp-total']) : data.length;
+      const totalPages = headers['x-wp-totalpages'] ? parseInt(headers['x-wp-totalpages']) : 1;
+      
+      // ИСПРАВЛЕНИЕ: Показываем все элементы, а не только первые 5
+      const displayLimit = Math.min(data.length, 20); // Увеличиваем лимит отображения
+      const items = data.slice(0, displayLimit).map(item => ({
         id: item.id,
         title: item.title?.rendered || item.name || 'Без названия',
         status: item.status || 'неизвестен',
-        date: item.date || item.date_gmt || 'неизвестна'
+        date: item.date || item.date_gmt || 'неизвестна',
+        type: item.type || 'неизвестен'
       }));
 
-      return `Найдено ${data.length} ${itemType}. Показываю первые ${Math.min(data.length, 5)}:\n\n${items.map(item => 
-        `ID: ${item.id}\nНазвание: ${item.title}\nСтатус: ${item.status}\nДата: ${item.date}\n`
-      ).join('\n')}${data.length > 5 ? `\n... и еще ${data.length - 5}` : ''}`;
+      let result = `Найдено ${totalItems} ${itemType}. Показываю ${displayLimit} из ${data.length} на текущей странице:\n\n`;
+      
+      result += items.map(item => {
+        let itemInfo = `ID: ${item.id}\nНазвание: ${item.title}\nСтатус: ${item.status}`;
+        if (item.type && item.type !== 'неизвестен') {
+          itemInfo += `\nТип: ${item.type}`;
+        }
+        itemInfo += `\nДата: ${item.date}\n`;
+        return itemInfo;
+      }).join('\n');
+
+      // Добавляем информацию о пагинации
+      if (totalPages > 1) {
+        result += `\n📄 ПАГИНАЦИЯ:\n`;
+        result += `Всего элементов: ${totalItems}\n`;
+        result += `Всего страниц: ${totalPages}\n`;
+        result += `\n💡 Для просмотра других страниц используйте:\n`;
+        result += `{"action":"${this.getActionFromEndpoint(endpoint)}","params":{"per_page":20,"page":2}}`;
+      }
+
+      return result;
     }
 
     if (method === 'POST') {
       const itemType = this.getItemType(endpoint);
-      return `✅ Успешно создан новый ${itemType}!\nID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nСсылка: ${data.link || 'недоступна'}`;
+      return `✅ Успешно создан новый ${itemType}!\nID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nТип: ${data.type || 'неизвестен'}\nСсылка: ${data.link || 'недоступна'}`;
     }
 
     if (method === 'PUT') {
       const itemType = this.getItemType(endpoint);
-      return `✅ Успешно обновлен ${itemType}!\nID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nПоследнее изменение: ${data.modified || 'неизвестно'}`;
+      return `✅ Успешно обновлен ${itemType}!\nID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nТип: ${data.type || 'неизвестен'}\nПоследнее изменение: ${data.modified || 'неизвестно'}`;
     }
 
     if (method === 'DELETE') {
@@ -1037,10 +1176,23 @@ ${suggestions}
 
     if (data.id) {
       const itemType = this.getItemType(endpoint);
-      return `${itemType} ID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nДата создания: ${data.date || 'неизвестна'}\nПоследнее изменение: ${data.modified || 'неизвестно'}\nСсылка: ${data.link || 'недоступна'}`;
+      return `${itemType} ID: ${data.id}\nНазвание: ${data.title?.rendered || data.name || 'Без названия'}\nСтатус: ${data.status || 'неизвестен'}\nТип: ${data.type || 'неизвестен'}\nДата создания: ${data.date || 'неизвестна'}\nПоследнее изменение: ${data.modified || 'неизвестно'}\nСсылка: ${data.link || 'недоступна'}`;
     }
 
     return JSON.stringify(data, null, 2);
+  }
+
+  getActionFromEndpoint(endpoint) {
+    const actionMap = {
+      '/posts': 'get_posts',
+      '/pages': 'get_pages',
+      '/categories': 'get_categories',
+      '/tags': 'get_tags',
+      '/comments': 'get_comments',
+      '/media': 'get_media',
+      '/users': 'get_users'
+    };
+    return actionMap[endpoint] || 'get_posts';
   }
 
   getItemType(endpoint) {
