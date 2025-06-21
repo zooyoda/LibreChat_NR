@@ -60,22 +60,24 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
         return `Ошибка конфигурации: ${this.configError}`;
       }
 
+      console.log('=== ОБРАБОТКА ВХОДНЫХ ДАННЫХ ===');
       console.log('Входные данные:', input);
+      
       const parsedInput = this.parseInput(input);
-      console.log('Обработанные данные:', JSON.stringify(parsedInput, null, 2));
+      console.log('Распарсенные данные:', JSON.stringify(parsedInput, null, 2));
       
       const { action, endpoint, data, params, id } = parsedInput;
       
-      // Специальные команды диагностики
-      if (action && action.toLowerCase() === 'test_capabilities') {
+      // Специальная обработка для диагностических команд
+      if (input.includes('test_capabilities') || action === 'test_capabilities') {
         return await this.testCapabilities();
       }
       
-      if (action && action.toLowerCase() === 'check_user_capabilities') {
+      if (input.includes('check_user_capabilities') || action === 'check_user_capabilities') {
         return await this.checkUserCapabilities();
       }
 
-      if (action && action.toLowerCase() === 'test_correct_approach') {
+      if (input.includes('test_correct_approach') || action === 'test_correct_approach') {
         return await this.testWithCorrectApproach();
       }
       
@@ -88,11 +90,20 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
 
   parseInput(input) {
     try {
-      // Пытаемся распарсить JSON
+      // Сначала пытаемся распарсить как JSON
       const parsed = JSON.parse(input);
       
-      // Обрабатываем разные форматы входных данных
-      if (parsed.input && parsed.data) {
+      // Обрабатываем разные форматы JSON входных данных
+      if (parsed.action) {
+        // Формат: {"action": "create_post", "data": {...}}
+        return {
+          action: this.mapActionToMethod(parsed.action),
+          endpoint: this.mapActionToEndpoint(parsed.action),
+          data: parsed.data || {},
+          params: parsed.params || {},
+          id: parsed.data?.id || parsed.id || null
+        };
+      } else if (parsed.input) {
         // Формат: {"input": "create_post", "data": {...}}
         return {
           action: this.mapActionToMethod(parsed.input),
@@ -101,17 +112,17 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
           params: parsed.params || {},
           id: parsed.data?.id || parsed.id || null
         };
-      } else if (parsed.action) {
-        // Формат: {"action": "POST", "endpoint": "/posts", "data": {...}}
+      } else if (parsed.method && parsed.endpoint) {
+        // Формат: {"method": "POST", "endpoint": "/posts", "data": {...}}
         return {
-          action: parsed.action || 'GET',
+          action: parsed.method || 'GET',
           endpoint: parsed.endpoint || '/posts',
           data: parsed.data || {},
           params: parsed.params || {},
           id: parsed.id || null
         };
       } else {
-        // Неизвестный формат, пытаемся угадать
+        // Неизвестный формат JSON
         return {
           action: 'GET',
           endpoint: '/posts',
@@ -126,48 +137,150 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     }
   }
 
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: правильный маппинг действий на HTTP методы
   mapActionToMethod(action) {
     const actionMap = {
+      // Posts
+      'get_posts': 'GET',
+      'list_posts': 'GET',
       'create_post': 'POST',
       'update_post': 'PUT',
       'delete_post': 'DELETE',
-      'get_posts': 'GET',
+      
+      // Pages
+      'get_pages': 'GET',
+      'list_pages': 'GET',
+      'create_page': 'POST',
+      'update_page': 'PUT',
+      'delete_page': 'DELETE',
+      
+      // Categories
+      'get_categories': 'GET',
+      'list_categories': 'GET',
       'create_category': 'POST',
       'update_category': 'PUT',
       'delete_category': 'DELETE',
-      'get_categories': 'GET',
+      
+      // Tags
+      'get_tags': 'GET',
+      'list_tags': 'GET',
+      'create_tag': 'POST',
+      'update_tag': 'PUT',
+      'delete_tag': 'DELETE',
+      
+      // Comments
+      'get_comments': 'GET',
+      'list_comments': 'GET',
       'create_comment': 'POST',
       'update_comment': 'PUT',
       'delete_comment': 'DELETE',
-      'get_comments': 'GET',
+      
+      // Media
+      'get_media': 'GET',
+      'list_media': 'GET',
+      'upload_media': 'POST',
+      
+      // Users
+      'get_users': 'GET',
+      'list_users': 'GET',
+      'get_current_user': 'GET',
+      
+      // Diagnostics
       'test_capabilities': 'test_capabilities',
       'check_user_capabilities': 'check_user_capabilities',
       'test_correct_approach': 'test_correct_approach'
     };
     
+    console.log(`Маппинг действия "${action}" в метод:`, actionMap[action] || 'GET');
     return actionMap[action] || 'GET';
   }
 
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: правильный маппинг действий на эндпоинты
   mapActionToEndpoint(action) {
     const endpointMap = {
+      // Posts
+      'get_posts': '/posts',
+      'list_posts': '/posts',
       'create_post': '/posts',
       'update_post': '/posts',
       'delete_post': '/posts',
-      'get_posts': '/posts',
+      
+      // Pages
+      'get_pages': '/pages',
+      'list_pages': '/pages',
+      'create_page': '/pages',
+      'update_page': '/pages',
+      'delete_page': '/pages',
+      
+      // Categories
+      'get_categories': '/categories',
+      'list_categories': '/categories',
       'create_category': '/categories',
       'update_category': '/categories',
       'delete_category': '/categories',
-      'get_categories': '/categories',
+      
+      // Tags
+      'get_tags': '/tags',
+      'list_tags': '/tags',
+      'create_tag': '/tags',
+      'update_tag': '/tags',
+      'delete_tag': '/tags',
+      
+      // Comments
+      'get_comments': '/comments',
+      'list_comments': '/comments',
       'create_comment': '/comments',
       'update_comment': '/comments',
       'delete_comment': '/comments',
-      'get_comments': '/comments'
+      
+      // Media
+      'get_media': '/media',
+      'list_media': '/media',
+      'upload_media': '/media',
+      
+      // Users
+      'get_users': '/users',
+      'list_users': '/users',
+      'get_current_user': '/users/me',
+      
+      // Diagnostics
+      'test_capabilities': '',
+      'check_user_capabilities': '',
+      'test_correct_approach': ''
     };
     
+    console.log(`Маппинг действия "${action}" в эндпоинт:`, endpointMap[action] || '/posts');
     return endpointMap[action] || '/posts';
   }
 
   parseTextInput(input) {
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обработка формата "action: {json_data}"
+    const actionDataMatch = input.match(/^(\w+):\s*(\{.*\})$/);
+    if (actionDataMatch) {
+      const [, actionText, jsonData] = actionDataMatch;
+      console.log(`Найден формат "action: json" - действие: ${actionText}, данные: ${jsonData}`);
+      
+      try {
+        const data = JSON.parse(jsonData);
+        return {
+          action: this.mapActionToMethod(actionText),
+          endpoint: this.mapActionToEndpoint(actionText),
+          data: data,
+          params: {},
+          id: data.id || null
+        };
+      } catch (e) {
+        console.error('Ошибка парсинга JSON в тексте:', e);
+        return {
+          action: 'GET',
+          endpoint: '/posts',
+          data: {},
+          params: {},
+          id: null
+        };
+      }
+    }
+
     const lowerInput = input.toLowerCase();
     
     // Проверяем специальные команды
@@ -183,6 +296,7 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       return { action: 'test_correct_approach', endpoint: '', data: {}, params: {}, id: null };
     }
     
+    // Определяем действие из текста
     let action = 'GET';
     if (lowerInput.includes('создай') || lowerInput.includes('добавь') || lowerInput.includes('новый') || lowerInput.includes('create')) {
       action = 'POST';
@@ -192,6 +306,7 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       action = 'DELETE';
     }
 
+    // Определяем endpoint
     let endpoint = '/posts';
     if (lowerInput.includes('страниц') || lowerInput.includes('page')) endpoint = '/pages';
     else if (lowerInput.includes('категор') || lowerInput.includes('categor')) endpoint = '/categories';
@@ -204,6 +319,42 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     const id = idMatch ? idMatch[1] : null;
 
     return { action, endpoint, data: {}, params: {}, id };
+  }
+
+  // Новый метод валидации данных
+  validatePostData(data) {
+    // WordPress требует хотя бы title или content
+    if (!data.title && !data.content) {
+      throw new Error('Необходимо указать title или content для создания поста');
+    }
+    
+    // Убеждаемся что строки не пустые
+    if (data.title && typeof data.title === 'string' && data.title.trim().length === 0) {
+      throw new Error('Title не может быть пустой строкой');
+    }
+    
+    if (data.content && typeof data.content === 'string' && data.content.trim().length === 0) {
+      throw new Error('Content не может быть пустой строкой');
+    }
+    
+    return true;
+  }
+
+  validateCategoryData(data) {
+    if (!data.name || typeof data.name !== 'string' || data.name.trim().length === 0) {
+      throw new Error('Необходимо указать непустое name для создания категории');
+    }
+    return true;
+  }
+
+  validateCommentData(data) {
+    if (!data.post && !data.post_id) {
+      throw new Error('Необходимо указать post или post_id для создания комментария');
+    }
+    if (!data.content || typeof data.content !== 'string' || data.content.trim().length === 0) {
+      throw new Error('Необходимо указать непустой content для комментария');
+    }
+    return true;
   }
 
   async getJWTToken() {
@@ -270,7 +421,7 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     try {
       const token = await this.getJWTToken();
       
-      console.log('=== ПРОВЕРКА ПРАВ ПОЛЬЗОВАТЕЛЯ (ИСПРАВЛЕННАЯ) ===');
+      console.log('=== ПРОВЕРКА ПРАВ ПОЛЬЗОВАТЕЛЯ (С CONTEXT=EDIT) ===');
       
       // КРИТИЧЕСКИ ВАЖНО: добавляем context=edit для получения capabilities
       const response = await axios.get(`${this.apiUrl}/wp-json/wp/v2/users/me?context=edit`, {
@@ -492,6 +643,19 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       throw new Error(this.configError);
     }
 
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Валидация данных перед отправкой
+    try {
+      if (method === 'POST' && endpoint === '/posts') {
+        this.validatePostData(data);
+      } else if (method === 'POST' && endpoint === '/categories') {
+        this.validateCategoryData(data);
+      } else if (method === 'POST' && endpoint === '/comments') {
+        this.validateCommentData(data);
+      }
+    } catch (validationError) {
+      return `❌ Ошибка валидации: ${validationError.message}`;
+    }
+
     const token = await this.getJWTToken();
     
     let url = `${this.apiUrl}/wp-json/wp/v2${endpoint}`;
@@ -508,6 +672,12 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
       }
     } else if (method === 'GET' && id) {
       url += `/${id}`;
+    }
+
+    // Специальная обработка для комментариев
+    if (endpoint === '/comments' && data.post_id) {
+      data.post = data.post_id;
+      delete data.post_id;
     }
 
     const config = {
@@ -537,10 +707,8 @@ Input format: JSON string with action, endpoint, data, params, and id fields, or
     }
 
     try {
-      console.log(`Выполняется ${method} запрос к: ${url}`);
-      if (Object.keys(data).length > 0) {
-        console.log('Данные запроса:', JSON.stringify(data, null, 2));
-      }
+      console.log(`Отправляем ${method} запрос к: ${url}`);
+      console.log('Данные:', JSON.stringify(data, null, 2));
       
       const response = await axios(config);
       console.log('Запрос выполнен успешно, статус:', response.status);
