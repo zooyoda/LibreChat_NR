@@ -50,13 +50,61 @@ Available operations: get_posts, create_post, update_post, delete_post, get_page
     this.password = fields.WORDPRESS_PASSWORD || this.getEnvVariable('WORDPRESS_PASSWORD');
 
     console.log('WordPress JWT API инициализация:');
-    console.log('- apiUrl:', this.apiUrl ? 'установлен' : 'НЕ УСТАНОВЛЕН');
-    console.log('- username:', this.username ? `установлен (${this.username})` : 'НЕ УСТАНОВЛЕН');
+    console.log('- apiUrl:', this.apiUrl);
+    console.log('- username:', this.username);
     console.log('- password:', this.password ? 'установлен' : 'НЕ УСТАНОВЛЕН');
+
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверка на "user_provided"
+    if (this.apiUrl === 'user_provided' || this.username === 'user_provided' || this.password === 'user_provided') {
+      this.isConfigured = false;
+      this.configError = `❌ ОШИБКА КОНФИГУРАЦИИ: Пользовательские данные не переданы в инструмент.
+
+🔧 РЕШЕНИЯ:
+1. Убедитесь, что вы ввели данные в интерфейсе LibreChat
+2. Перезагрузите страницу после ввода данных
+3. Проверьте правильность URL (должен быть https://yoursite.com)
+4. Убедитесь, что переменные окружения установлены как "user_provided"
+
+💡 ТЕКУЩИЕ ЗНАЧЕНИЯ:
+- API URL: ${this.apiUrl}
+- Username: ${this.username}
+- Password: ${this.password ? 'установлен' : 'не установлен'}
+
+📋 ТРЕБУЕМЫЙ ФОРМАТ:
+- API URL: https://neuralrunner.ru
+- Username: admin_kiu
+- Password: ваш Application Password`;
+      return;
+    }
 
     if (!this.apiUrl || !this.username || !this.password) {
       this.isConfigured = false;
-      this.configError = `Отсутствуют обязательные поля. Настройте инструмент в интерфейсе LibreChat.`;
+      this.configError = `❌ ОТСУТСТВУЮТ ОБЯЗАТЕЛЬНЫЕ ПОЛЯ
+
+🔧 НЕОБХОДИМО УКАЗАТЬ:
+- WordPress Site URL (например: https://neuralrunner.ru)
+- WordPress Username (например: admin_kiu)  
+- WordPress Password (Application Password)
+
+💡 Настройте инструмент в интерфейсе LibreChat.`;
+      return;
+    }
+
+    // Проверяем, что URL валидный
+    try {
+      new URL(this.apiUrl);
+    } catch (error) {
+      this.isConfigured = false;
+      this.configError = `❌ НЕВЕРНЫЙ URL: ${this.apiUrl}
+
+🔧 ПРАВИЛЬНЫЙ ФОРМАТ URL:
+- https://neuralrunner.ru
+- https://yoursite.com
+- http://localhost:8080
+
+❌ НЕПРАВИЛЬНО:
+- neuralrunner.ru (без протокола)
+- user_provided (не заменен на реальный URL)`;
       return;
     }
 
@@ -69,7 +117,7 @@ Available operations: get_posts, create_post, update_post, delete_post, get_page
     this.isConfigured = true;
     this.userCapabilities = null; // Кэш для capabilities
 
-    console.log('WordPress JWT API успешно инициализирован с URL:', this.apiUrl);
+    console.log('✅ WordPress JWT API успешно инициализирован с URL:', this.apiUrl);
   }
 
   getEnvVariable(name) {
@@ -79,7 +127,7 @@ Available operations: get_posts, create_post, update_post, delete_post, get_page
   async _call(input) {
     try {
       if (!this.isConfigured) {
-        return `Ошибка конфигурации: ${this.configError}`;
+        return this.configError;
       }
 
       console.log('=== ОБРАБОТКА ВХОДНЫХ ДАННЫХ ===');
@@ -119,7 +167,15 @@ Available operations: get_posts, create_post, update_post, delete_post, get_page
       return await this.makeRequest(action, endpoint, data, params, id);
     } catch (error) {
       console.error('Ошибка в _call:', error);
-      return `Ошибка: ${error.message}`;
+      return `❌ Ошибка: ${error.message}
+
+🔧 ВОЗМОЖНЫЕ ПРИЧИНЫ:
+1. Неверные учетные данные WordPress
+2. Проблемы с сетевым подключением
+3. Неправильная конфигурация JWT плагина
+4. Неверный URL сайта
+
+💡 Запустите диагностику: {"action":"test_capabilities"}`;
     }
   }
 
@@ -639,10 +695,21 @@ ${suggestions}
       console.error('Ошибка получения JWT токена:', error.response?.data || error.message);
       
       if (error.response?.status === 403) {
-        throw new Error(`Ошибка авторизации: неверные учетные данные для пользователя ${this.username}. Проверьте Application Password.`);
+        throw new Error(`❌ Ошибка авторизации: неверные учетные данные для пользователя ${this.username}. 
+
+🔧 ПРОВЕРЬТЕ:
+1. Правильность имени пользователя: ${this.username}
+2. Application Password (не обычный пароль!)
+3. Активность JWT плагина на сайте ${this.apiUrl}`);
       }
       
-      throw new Error(`Не удалось получить JWT токен: ${error.response?.data?.message || error.message}`);
+      throw new Error(`❌ Не удалось получить JWT токен: ${error.response?.data?.message || error.message}
+
+🔧 ВОЗМОЖНЫЕ ПРИЧИНЫ:
+1. Неверный URL сайта: ${this.apiUrl}
+2. JWT плагин не установлен или не активен
+3. Проблемы с сетевым подключением
+4. Неверные учетные данные`);
     }
   }
 
