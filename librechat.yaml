@@ -1,0 +1,22 @@
+version: 1.2.8
+cache: true
+
+# Секция speech для STT/TTS
+speech:
+  speechTab: true
+  speechToText:
+    engineSTT: "openai"
+    apiKey: "STT_API_KEY"
+    model: "whisper-1"
+    language: "ru"
+    autoTranscribeAudio: true
+    decibelValue: -45
+    autoSendText: 0
+  textToSpeech:
+    engineTTS: "openai"
+    apiKey: "TTS_API_KEY"
+    model: "tts-1"
+    voice: "alloy"
+    automaticPlayback: true
+    playbackRate: 1.0
+    cacheTTS: true
