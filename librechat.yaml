@@ -1,7 +1,7 @@
-version: 1.2.8
+version: 1.2.6
 cache: true
 
-# Секция speech для STT/TTS
+# Конфигурация речи
 speech:
   speechTab: true
   speechToText:
@@ -20,3 +20,70 @@ speech:
     automaticPlayback: true
     playbackRate: 1.0
     cacheTTS: true
+
+# Конфигурация файлов с RAG поддержкой
+fileConfig:
+  endpoints:
+    openAI:
+      fileLimit: 20
+      fileSizeLimit: 20971520
+      totalSizeLimit: 104857600
+      supportedMimeTypes:
+        - "application/pdf"
+        - "text/plain"
+        - "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        - "text/csv"
+        - "application/json"
+        - "application/xml"
+        - "text/markdown"
+        - "image/jpeg"
+        - "image/png"
+        - "image/gif"
+        - "image/webp"
+    anthropic:
+      fileLimit: 20
+      fileSizeLimit: 20971520
+      totalSizeLimit: 104857600
+      supportedMimeTypes:
+        - "application/pdf"
+        - "text/plain"
+        - "image/jpeg"
+        - "image/png"
+        - "image/gif"
+        - "image/webp"
+    google:
+      fileLimit: 20
+      fileSizeLimit: 20971520
+      totalSizeLimit: 104857600
+      supportedMimeTypes:
+        - "application/pdf"
+        - "text/plain"
+        - "image/jpeg"
+        - "image/png"
+        - "image/gif"
+        - "image/webp"
+
+# RAG API конфигурация
+ragApi:
+  enabled: true
+  endpoint: "${RAG_API_URL}"
+  chunkSize: 1500
+  chunkOverlap: 100
+  embeddingsProvider: "openai"
+  embeddingsModel: "text-embedding-3-small"
+  useFullContext: false
+  collectionName: "testcollection"
+
+# OCR конфигурация
+ocr:
+  enabled: true
+  provider: "openai"
+  apiKey: "${OCR_API_KEY}"
+  baseURL: "${OCR_BASEURL}"
+  model: "gpt-4o"
+  supportedFormats:
+    - "image/jpeg"
+    - "image/png"
+    - "image/gif"
+    - "image/webp"
+    - "application/pdf"
