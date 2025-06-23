@@ -11,14 +11,6 @@ interface:
   bookmarks: true
   multiConvo: true
 
-privacyPolicy:
-  externalUrl: 'https://librechat.ai/privacy-policy'
-  openNewTab: true
-
-termsOfService:
-  externalUrl: 'https://librechat.ai/tos'
-  openNewTab: true
-
 registration:
   socialLogins: ["discord", "facebook", "github", "google", "openid"]
 
