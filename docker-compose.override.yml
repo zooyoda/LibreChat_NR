@@ -4,3 +4,4 @@ services:
   api:
     environment:
       - CONFIG_PATH=https://raw.githubusercontent.com/zooyoda/LibreChat_NR/tools-edit/librechat.yaml
+      
