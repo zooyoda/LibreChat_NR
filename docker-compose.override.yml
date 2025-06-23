@@ -3,4 +3,4 @@ version: '3.4'
 services:
   api:
     environment:
-      - CONFIG_PATH=https://raw.githubusercontent.com/LibreChat-AI/librechat-config-yaml/main/librechat-env-l.yaml
+      - CONFIG_PATH=https://raw.githubusercontent.com/zooyoda/LibreChat_NR/tools-edit/librechat.yaml
