@@ -56,7 +56,6 @@ endpoints:
       apiKey: "${APIPIE_API_KEY}"
       baseURL: "https://apipie.ai/v1/"
       models:
-        fetch: false
         default:
           - DeepSeek-Prover-V2-671B
           - DeepSeek-R1
