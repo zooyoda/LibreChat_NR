@@ -1,5 +1,31 @@
 [
   {
+    "name": "WordPress JWT API",
+    "pluginKey": "wordpress_jwt_api",
+    "toolkit": true,
+    "description": "Comprehensive WordPress content management through REST API with JWT authentication. Supports posts, pages, categories, tags, media, users, and comments management.",
+    "icon": "https://s.w.org/style/images/about/WordPress-logotype-wmark.png",
+    "authConfig": [
+      {
+        "authField": "WORDPRESS_API_URL",
+        "label": "WordPress Site URL",
+        "description": "Your WordPress site URL (e.g., https://yoursite.com)"
+      },
+      {
+        "authField": "WORDPRESS_USERNAME",
+        "label": "WordPress Username",
+        "description": "WordPress admin username for JWT authentication"
+      },
+      {
+        "authField": "WORDPRESS_PASSWORD",
+        "label": "WordPress Password",
+        "description": "WordPress admin password for JWT authentication"
+      }
+    ],
+    "authenticated": false,
+    "isAuthRequired": true
+  },
+  {
     "name": "Traversaal",
     "pluginKey": "traversaal_search",
     "description": "Traversaal is a robust search API tailored for LLM Agents. Get an API key here: https://api.traversaal.ai",
@@ -8,9 +34,11 @@
       {
         "authField": "TRAVERSAAL_API_KEY",
         "label": "Traversaal API Key",
-        "description": "Get your API key here: <a href=\"https://api.traversaal.ai\" target=\"_blank\">https://api.traversaal.ai</a>"
+        "description": "Get your API key here: https://api.traversaal.ai"
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "Google",
@@ -21,14 +49,16 @@
       {
         "authField": "GOOGLE_CSE_ID",
         "label": "Google CSE ID",
-        "description": "This is your Google Custom Search Engine ID. For instructions on how to obtain this, see <a href='https://github.com/danny-avila/LibreChat/blob/main/docs/features/plugins/google_search.md'>Our Docs</a>."
+        "description": "This is your Google Custom Search Engine ID. For instructions on how to obtain this, see Our Docs."
       },
       {
         "authField": "GOOGLE_SEARCH_API_KEY",
         "label": "Google API Key",
-        "description": "This is your Google Custom Search API Key. For instructions on how to obtain this, see <a href='https://github.com/danny-avila/LibreChat/blob/main/docs/features/plugins/google_search.md'>Our Docs</a>."
+        "description": "This is your Google Custom Search API Key. For instructions on how to obtain this, see Our Docs."
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "YouTube",
@@ -42,7 +72,9 @@
         "label": "YouTube API Key",
         "description": "Your YouTube Data API v3 key."
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "OpenAI Image Tools",
@@ -56,7 +88,9 @@
         "label": "OpenAI Image Tools API Key",
         "description": "Your OpenAI API Key for Image Generation and Editing"
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "Wolfram",
@@ -67,9 +101,11 @@
       {
         "authField": "WOLFRAM_APP_ID",
         "label": "Wolfram App ID",
-        "description": "An AppID must be supplied in all calls to the Wolfram|Alpha API. You can get one by registering at <a href='http://products.wolframalpha.com/api/'>Wolfram|Alpha</a> and going to the <a href='https://developer.wolframalpha.com/portal/myapps/'>Developer Portal</a>."
+        "description": "An AppID must be supplied in all calls to the Wolfram|Alpha API. You can get one by registering at Wolfram|Alpha and going to the Developer Portal."
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "Browser",
@@ -82,7 +118,9 @@
         "label": "OpenAI API Key",
         "description": "Browser makes use of OpenAI embeddings"
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "Serpapi",
@@ -93,9 +131,11 @@
       {
         "authField": "SERPAPI_API_KEY",
         "label": "Serpapi Private API Key",
-        "description": "Private Key for Serpapi. Register at <a href='https://serpapi.com/'>Serpapi</a> to obtain a private key."
+        "description": "Private Key for Serpapi. Register at Serpapi to obtain a private key."
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "DALL-E-3",
@@ -108,7 +148,9 @@
         "label": "OpenAI API Key",
         "description": "You can use DALL-E with your API Key from OpenAI."
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "Tavily Search",
@@ -121,7 +163,9 @@
         "label": "Tavily API Key",
         "description": "Get your API key here: https://app.tavily.com/"
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "Calculator",
@@ -139,9 +183,11 @@
       {
         "authField": "SD_WEBUI_URL",
         "label": "Your Stable Diffusion WebUI API URL",
-        "description": "You need to provide the URL of your Stable Diffusion WebUI API. For instructions on how to obtain this, see <a href='url'>Our Docs</a>."
+        "description": "You need to provide the URL of your Stable Diffusion WebUI API. For instructions on how to obtain this, see Our Docs."
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "Azure AI Search",
@@ -164,7 +210,9 @@
         "label": "Azure AI Search API Key",
         "description": "You need to provide your API Key for Azure AI Search."
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "OpenWeather",
@@ -175,9 +223,11 @@
       {
         "authField": "OPENWEATHER_API_KEY",
         "label": "OpenWeather API Key",
-        "description": "Sign up at <a href=\"https://home.openweathermap.org/users/sign_up\" target=\"_blank\">OpenWeather</a>, then get your key at <a href=\"https://home.openweathermap.org/api_keys\" target=\"_blank\">API keys</a>."
+        "description": "Sign up at OpenWeather, then get your key at API keys."
       }
-    ]
+    ],
+    "authenticated": true,
+    "isAuthRequired": true
   },
   {
     "name": "Flux",
@@ -191,6 +241,7 @@
         "label": "Your Flux API Key",
         "description": "Provide your Flux API key from your user profile."
       }
-    ]
+    ],
+    "authenticated": true
   }
 ]
