@@ -2,5 +2,5 @@ version: '3.4'
 
 services:
   api:
-    volumes:
-      - ./librechat.yaml:/app/librechat.yaml
+   # volumes:
+   #   - ./librechat.yaml:/app/librechat.yaml
