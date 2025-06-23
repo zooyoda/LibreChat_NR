@@ -1,0 +1,11 @@
+{
+  "name": "mcp-github-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@octokit/rest": "^20.0.0",
+    "dotenv": "^16.0.0"
+  }
+}
