@@ -19,6 +19,9 @@ RUN npm run frontend
 # Создаем необходимые директории
 RUN mkdir -p /app/client/public/images /app/api/logs
 
+# копируем librechat.yaml
+COPY librechat.yaml /app/librechat.yaml
+
 # Открываем порт 3080
 EXPOSE 3080
 
