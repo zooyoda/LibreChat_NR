@@ -1,27 +1,17 @@
 version: 1.2.6
 cache: true
 
-# Правильная структура для речевых функций
+# Правильная структура speech из официальной документации
 speech:
-  speechTab: true
-  conversationMode: true
-  advancedMode: false
-  speechToText:
-    engineSTT: "openai"
-    apiKey: "STT_API_KEY"
-    model: "whisper-1"
-    language: "ru"
-    autoTranscribeAudio: true
-    decibelValue: -45
-    autoSendText: 0
-  textToSpeech:
-    engineTTS: "openai"
-    apiKey: "TTS_API_KEY"
-    model: "tts-1"
-    voice: "alloy"
-    automaticPlayback: true
-    playbackRate: 1.0
-    cacheTTS: true
+  stt:
+    openai:
+      apiKey: "${STT_API_KEY}"
+      model: "whisper-1"
+  tts:
+    openai:
+      apiKey: "${TTS_API_KEY}"
+      model: "tts-1"
+      voices: ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
 
 # Конфигурация файлов
 fileConfig:
