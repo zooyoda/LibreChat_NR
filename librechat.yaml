@@ -2166,6 +2166,7 @@ speech:
     openai:
       apiKey: "${STT_API_KEY}"
       model: "whisper-1"
+      language: "ru"
   tts:
     openai:
       apiKey: "${TTS_API_KEY}"
