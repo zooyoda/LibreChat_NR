@@ -2211,15 +2211,15 @@ fileConfig:
         - "image/gif"
         - "image/webp"
 
-ragApi:
-  enabled: true
-  endpoint: "http://host.docker.internal:8000"
-  chunkSize: 1500
-  chunkOverlap: 100
-  embeddingsProvider: "openai"
-  embeddingsModel: "text-embedding-3-small"
-  useFullContext: false
-  collectionName: "testcollection"
+#ragApi:
+#  enabled: true
+#  endpoint: "http://host.docker.internal:8000"
+#  chunkSize: 1500
+#  chunkOverlap: 100
+#  embeddingsProvider: "openai"
+#  embeddingsModel: "text-embedding-3-small"
+#  useFullContext: false
+#  collectionName: "testcollection"
 
 rateLimits:
   fileUploads:
