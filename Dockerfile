@@ -6,6 +6,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY client/package*.json ./client/
 COPY api/package*.json ./api/
+COPY mcp-github-api/package*.json ./mcp-github-api/
 
 # Копируем исходный код (все файлы проекта)
 COPY . .
@@ -18,6 +19,13 @@ USER node
 
 # Устанавливаем ВСЕ зависимости (включая dev) для сборки
 RUN npm ci --include=dev
+
+# Устанавливаем зависимости для mcp-github-api
+WORKDIR /app/mcp-github-api
+RUN npm install --omit=dev
+
+# Возвращаемся в корень
+WORKDIR /app
 
 # Собираем фронтенд
 RUN npm run frontend
