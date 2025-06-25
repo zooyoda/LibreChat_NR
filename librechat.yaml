@@ -2270,5 +2270,5 @@ mcpServers:
   telegram:
        type: sse
        url: http://amvera-neuralrunner-run-telegram-mcp:8004/sse
-       timeout: 120000
-       initTimeout: 60000
+       timeout: 300000
+       initTimeout: 120000
