@@ -2266,3 +2266,9 @@ mcpServers:
     initTimeout: 30000
     env:
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
+  
+  telegram:
+       type: sse
+       url: http://telegram-mcp:8004/sse
+       timeout: 60000
+       initTimeout: 30000
