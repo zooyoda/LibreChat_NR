@@ -4,3 +4,15 @@ services:
   api:
    # volumes:
    #   - ./librechat.yaml:/app/librechat.yaml
+ telegram-mcp:
+    build:
+      context: ./telegram-mcp
+    ports:
+      - 8004:8004
+    restart: unless-stopped
+    networks:
+      - librechatdefault
+
+networks:
+  librechatdefault:
+    external: true
