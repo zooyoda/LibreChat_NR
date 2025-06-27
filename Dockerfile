@@ -33,38 +33,45 @@ RUN mkdir -p /app/client/public/images /app/api/logs
 COPY librechat.yaml /app/librechat.yaml
 
 # --- MCP TELEGRAM STAGE ---
-WORKDIR /app/tg-mcp
+# Переключаемся на root для системных зависимостей
+USER root
 
-# Создаём виртуальное окружение Python
+# Установка Python и системных зависимостей
+RUN apk update && apk add --no-cache \
+    python3 \
+    py3-pip \
+    py3-virtualenv \
+    build-base \
+    libffi-dev \
+    openssl-dev \
+    curl
+
+# Установка supergateway
+RUN apk add --no-cache nodejs npm
+RUN npm install -g supergateway
+
+# Работа с виртуальным окружением Python
+WORKDIR /app/tg-mcp
 RUN python3 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 
-# requirements.txt сначала (для кеша pip install)
+# Установка Python-зависимостей
 COPY tg-mcp/requirements.txt .
-
-# Установка зависимостей python для telegram-mcp внутри venv
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir --upgrade "mcp[cli]>=1.9.4"
 
-# Копируем остальной код telegram-mcp
+# Копируем исходный код telegram-mcp
 COPY tg-mcp/ .
 
-# --- Возврат в корень ---
-WORKDIR /app
+# Возвращаем права пользователю node
+RUN chown -R node:node /app/tg-mcp
 
-# Экспонируем порты для LibreChat и telegram-mcp
+# --- Финальная настройка ---
+WORKDIR /app
+USER node
+
+# Экспонируем порты
 EXPOSE 3080
 EXPOSE 8004
 
 # Установка переменных окружения
-ENV HOST=0.0.0.0
-ENV NODE_ENV=production
-
-# Устанавливаем pm2
-RUN npm install -g pm2
-
-# Копируем pm2-конфиг
-COPY pm2.config.js /app/pm2.config.js
-
-# Стартуем оба сервиса: LibreChat + telegram-mcp
-CMD ["pm2-runtime", "pm2.config.js"]
