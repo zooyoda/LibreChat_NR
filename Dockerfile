@@ -33,33 +33,16 @@ RUN mkdir -p /app/client/public/images /app/api/logs
 COPY librechat.yaml /app/librechat.yaml
 
 # --- MCP TELEGRAM STAGE ---
-# Переключаемся на root, т.к. будем ставить системные зависимости
-USER root
-
-# Установка Python, pip и всех нужных пакетов
-RUN apk add --no-cache \
-  python3 \
-  py3-pip \
-  py3-cryptography \
-  py3-setuptools \
-  py3-wheel \
-  py3-numpy \
-  build-base \
-  libffi-dev \
-  openssl-dev \
-  curl
-
-# NodeJS + supergateway
-RUN apk add --no-cache nodejs npm
-RUN npm install -g supergateway
-
-# --- Установка telegram-mcp ---
 WORKDIR /app/tg-mcp
+
+# Создаём виртуальное окружение Python
+RUN python3 -m venv /venv
+ENV PATH="/venv/bin:$PATH"
 
 # requirements.txt сначала (для кеша pip install)
 COPY tg-mcp/requirements.txt .
 
-# Установка зависимостей python для telegram-mcp
+# Установка зависимостей python для telegram-mcp внутри venv
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir --upgrade "mcp[cli]>=1.9.4"
 
