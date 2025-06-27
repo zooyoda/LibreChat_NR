@@ -2266,9 +2266,10 @@ mcpServers:
     initTimeout: 30000
     env:
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
-  
+      
   telegram:
-       type: sse
-       url: http://amvera-neuralrunner-run-telegram-mcp:8004/sse
-       timeout: 300000
-       initTimeout: 120000
+    type: sse
+    url: http://localhost:8004/sse
+    timeout: 300000
+    initTimeout: 120000
+
