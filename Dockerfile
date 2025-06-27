@@ -47,8 +47,7 @@ RUN apk add --no-cache \
   build-base \
   libffi-dev \
   openssl-dev \
-  curl \
-  pillow
+  curl
 
 # NodeJS + supergateway
 RUN apk add --no-cache nodejs npm
