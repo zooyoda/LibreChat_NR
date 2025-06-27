@@ -38,20 +38,17 @@ USER root
 
 # Установка Python, pip и всех нужных пакетов
 RUN apk add --no-cache \
-    python3 \
-    py3-pip \
-    py3-cryptography \
-    py3-virtualenv \
-    py3-pillow \
-    py3-curl \
-    py3-gcc \
-    py3-musl-dev \
-    py3-openssl \
-    py3-libffi \
-    py3-setuptools \
-    py3-wheel \
-    py3-numpy \
-    py3-make
+  python3 \
+  py3-pip \
+  py3-cryptography \
+  py3-setuptools \
+  py3-wheel \
+  py3-numpy \
+  build-base \
+  libffi-dev \
+  openssl-dev \
+  curl \
+  pillow
 
 # NodeJS + supergateway
 RUN apk add --no-cache nodejs npm
