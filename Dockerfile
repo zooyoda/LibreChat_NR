@@ -2,6 +2,9 @@
 FROM node:20.19-alpine AS nodebase
 WORKDIR /app
 
+# Установка socat и Python-зависимостей
+RUN apk add --no-cache socat python3 py3-pip
+
 # Кэшируем зависимости
 COPY package*.json ./
 COPY client/package*.json ./client/
@@ -38,17 +41,10 @@ USER root
 
 # Установка Python и системных зависимостей
 RUN apk update && apk add --no-cache \
-    python3 \
-    py3-pip \
-    py3-virtualenv \
     build-base \
     libffi-dev \
     openssl-dev \
     curl
-
-# Установка supergateway
-RUN apk add --no-cache nodejs npm
-RUN npm install -g supergateway
 
 # Работа с виртуальным окружением Python
 WORKDIR /app/tg-mcp
@@ -66,7 +62,7 @@ COPY tg-mcp/ .
 # Возвращаем права пользователю node
 RUN chown -R node:node /app/tg-mcp
 
-# -- Финальная настройка --
+# --- Финальная настройка ---
 WORKDIR /app
 USER node
 
@@ -78,11 +74,11 @@ EXPOSE 8004
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
 
-# Установка pm2 без глобального флага (локально в проект)
+# Установка pm2 без глобального флага
 RUN npm install pm2
 
 # Копируем pm2-конфиг
 COPY pm2.config.js /app/pm2.config.js
 
-# Стартуем оба сервиса через локальный pm2
+# Стартуем сервисы
 CMD ["./node_modules/.bin/pm2-runtime", "pm2.config.js"]
