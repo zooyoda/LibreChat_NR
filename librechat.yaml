@@ -2268,10 +2268,20 @@ mcpServers:
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
       
   telegram:
-    type: telegram
-    args: ["./mcp-telegram/src/index.ts"]
-    session_string: ${TELEGRAM_SESSION_STRING}
-    api_id: ${TELEGRAM_API_ID}
-    api_hash: ${TELEGRAM_API_HASH}
-    transport: stdio
+    type: stdio
+    command: "npx"
+    args: ["ts-node", "./mcp-telegram/src/index.ts"]
+    timeout: 120000
+    initTimeout: 60000
+    env:
+      TELEGRAM_SESSION_STRING: "${TELEGRAM_SESSION_STRING}"
+      TELEGRAM_API_ID: "${TELEGRAM_API_ID}"
+      TELEGRAM_API_HASH: "${TELEGRAM_API_HASH}"
+    
+    #type: telegram
+    #args: ["./mcp-telegram/src/index.ts"]
+    #session_string: ${TELEGRAM_SESSION_STRING}
+    #api_id: ${TELEGRAM_API_ID}
+    #api_hash: ${TELEGRAM_API_HASH}
+    #transport: stdio
 
