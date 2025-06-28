@@ -45,6 +45,15 @@ def json_serializer(obj):
 
 load_dotenv()
 
+# === DEBUG: Проверка переменных окружения ===
+print("DEBUG ENV START")
+print("TELEGRAM_API_ID:", os.getenv("TELEGRAM_API_ID"))
+print("TELEGRAM_API_HASH:", os.getenv("TELEGRAM_API_HASH"))
+print("TELEGRAM_SESSION_STRING:", os.getenv("TELEGRAM_SESSION_STRING"))
+print("TELEGRAM_SESSION_NAME:", os.getenv("TELEGRAM_SESSION_NAME"))
+print("DEBUG ENV END")
+# === END DEBUG ===
+
 TELEGRAM_API_ID = int(os.getenv("TELEGRAM_API_ID"))
 TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
 TELEGRAM_SESSION_NAME = os.getenv("TELEGRAM_SESSION_NAME")
