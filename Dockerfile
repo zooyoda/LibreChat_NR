@@ -3,7 +3,7 @@ FROM node:20.19-alpine AS nodebase
 WORKDIR /app
 
 # Установка socat и Python-зависимостей
-RUN apk add --no-cache socat python3 py3-pip
+#RUN apk add --no-cache socat python3 py3-pip
 
 # Кэшируем зависимости
 COPY package*.json ./
