@@ -42,6 +42,18 @@ from telethon.tl.types import (
 )
 import telethon.errors.rpcerrorlist
 
+# 2222
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+else:
+    import os
+    sys.stdout = os.fdopen(sys.stdout.fileno(), "w", 1)
+    sys.stderr = os.fdopen(sys.stderr.fileno(), "w", 1)
+
+# 2222
+
 
 def json_serializer(obj):
     """Helper function to convert non-serializable objects for JSON serialization."""
@@ -2450,9 +2462,12 @@ if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply()
     import asyncio
-
+    
     async def main():
+        print("Starting Telegram client...", flush=True)
         await client.start()
-        await mcp.run_http_async(port=8004)  # <--- ВАЖНО!
-
+        print("Telegram client initialized!", flush=True)
+        print("Starting MCP HTTP server on port 8004", flush=True)
+        await mcp.run_http_async(host='0.0.0.0', port=8004)  # Ключевое исправление!
+    
     asyncio.run(main())
