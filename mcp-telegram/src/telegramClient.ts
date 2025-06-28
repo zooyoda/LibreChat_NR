@@ -1,6 +1,6 @@
-import { StringSession } from "telegram/sessions/index.js";
+import { StringSession } from "telegram/sessions";
 import { TelegramClient } from "telegram";
-import { NewMessage } from "telegram/events/index.js";
+import { NewMessage } from "telegram/events";
 import { Api } from "telegram";
 import * as dotenv from "dotenv";
 
