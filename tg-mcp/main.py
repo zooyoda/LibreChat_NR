@@ -100,7 +100,7 @@ try:
 
     logger.info(f"Logging initialized to {log_file_path}")
 except Exception as log_error:
-    print(f"WARNING: Error setting up log file: {log_error}")
+    print(f"WARNING: Error setting up log file: {log_error}", flush=True)
     # Fallback to console-only logging
     logger.addHandler(console_handler)
     logger.error(f"Failed to set up log file handler: {log_error}")
@@ -865,7 +865,7 @@ async def get_me() -> str:
     """
     try:
         me = await client.get_me()
-        return json.dumps(format_entity(me), indent=2)
+        return json.dumps(format_entity(me), indent=2, flush=True)
     except Exception as e:
         return log_and_format_error("get_me", e)
 
@@ -1321,7 +1321,7 @@ async def export_contacts() -> str:
     try:
         result = await client(functions.contacts.GetContactsRequest(hash=0))
         users = result.users
-        return json.dumps([format_entity(u) for u in users], indent=2)
+        return json.dumps([format_entity(u) for u in users], indent=2, flush=True)
     except Exception as e:
         return log_and_format_error("export_contacts", e)
 
@@ -1333,7 +1333,7 @@ async def get_blocked_users() -> str:
     """
     try:
         result = await client(functions.contacts.GetBlockedRequest(offset=0, limit=100))
-        return json.dumps([format_entity(u) for u in result.users], indent=2)
+        return json.dumps([format_entity(u) for u in result.users], indent=2, flush=True)
     except Exception as e:
         return log_and_format_error("get_blocked_users", e)
 
@@ -2025,7 +2025,7 @@ async def search_public_chats(query: str) -> str:
     """
     try:
         result = await client(functions.contacts.SearchRequest(q=query, limit=20))
-        return json.dumps([format_entity(u) for u in result.users], indent=2)
+        return json.dumps([format_entity(u) for u in result.users], indent=2, flush=True)
     except Exception as e:
         return log_and_format_error("search_public_chats", e, query=query)
 
@@ -2172,7 +2172,7 @@ async def get_sticker_sets() -> str:
     """
     try:
         result = await client(functions.messages.GetAllStickersRequest(hash=0))
-        return json.dumps([s.title for s in result.sets], indent=2)
+        return json.dumps([s.title for s in result.sets], indent=2, flush=True)
     except Exception as e:
         return log_and_format_error("get_sticker_sets", e)
 
@@ -2216,7 +2216,7 @@ async def get_gif_search(query: str, limit: int = 10) -> str:
             if not result.gifs:
                 return "[]"
             return json.dumps(
-                [g.document.id for g in result.gifs], indent=2, default=json_serializer
+                [g.document.id for g in result.gifs], indent=2, default=json_serializer, flush=True
             )
         except (AttributeError, ImportError):
             # Fallback approach: Use SearchRequest with GIF filter
@@ -2245,7 +2245,7 @@ async def get_gif_search(query: str, limit: int = 10) -> str:
                 for msg in result.messages:
                     if hasattr(msg, "media") and msg.media and hasattr(msg.media, "document"):
                         gif_ids.append(msg.media.document.id)
-                return json.dumps(gif_ids, default=json_serializer)
+                return json.dumps(gif_ids, default=json_serializer, flush=True)
             except Exception as inner_e:
                 # Last resort: Try to fetch from a public bot
                 return f"Could not search GIFs using available methods: {inner_e}"
@@ -2287,7 +2287,7 @@ async def get_bot_info(bot_username: str) -> str:
         # Create a more structured, serializable response
         if hasattr(result, "to_dict"):
             # Use custom serializer to handle non-serializable types
-            return json.dumps(result.to_dict(), indent=2, default=json_serializer)
+            return json.dumps(result.to_dict(), indent=2, default=json_serializer, flush=True)
         else:
             # Fallback if to_dict is not available
             info = {
@@ -2303,7 +2303,7 @@ async def get_bot_info(bot_username: str) -> str:
             if hasattr(result, "full_user") and hasattr(result.full_user, "about"):
                 info["bot_info"]["about"] = result.full_user.about
 
-            return json.dumps(info, indent=2)
+            return json.dumps(info, indent=2, flush=True)
     except Exception as e:
         logger.exception(f"get_bot_info failed (bot_username={bot_username})")
         return log_and_format_error("get_bot_info", e, bot_username=bot_username)
@@ -2379,7 +2379,7 @@ async def get_user_photos(user_id: int, limit: int = 10) -> str:
         photos = await client(
             functions.photos.GetUserPhotosRequest(user_id=user, offset=0, max_id=0, limit=limit)
         )
-        return json.dumps([p.id for p in photos.photos], indent=2)
+        return json.dumps([p.id for p in photos.photos], indent=2, flush=True)
     except Exception as e:
         return log_and_format_error("get_user_photos", e, user_id=user_id, limit=limit)
 
@@ -2412,7 +2412,7 @@ async def get_recent_actions(chat_id: int) -> str:
             return "No recent admin actions found."
 
         # Use the custom serializer to handle datetime objects
-        return json.dumps([e.to_dict() for e in result.events], indent=2, default=json_serializer)
+        return json.dumps([e.to_dict() for e in result.events], indent=2, default=json_serializer, flush=True)
     except Exception as e:
         logger.exception(f"get_recent_actions failed (chat_id={chat_id})")
         return log_and_format_error("get_recent_actions", e, chat_id=chat_id)
@@ -2453,14 +2453,14 @@ if __name__ == "__main__":
     async def main() -> None:
         try:
             # Start the Telethon client non-interactively
-            print("Starting Telegram client...")
+            print("Starting Telegram client...", flush=True)
             await client.start()
 
-            print("Telegram client started. Running MCP server...")
+            print("Telegram client started. Running MCP server...", flush=True)
             # Use the asynchronous entrypoint instead of mcp.run()
             await mcp.run_stdio_async()
         except Exception as e:
-            print(f"Error starting client: {e}", file=sys.stderr)
+            print(f"Error starting client: {e}", file=sys.stderr, flush=True)
             if isinstance(e, sqlite3.OperationalError) and "database is locked" in str(e):
                 print(
                     "Database lock detected. Please ensure no other instances are running.",
