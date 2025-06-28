@@ -78,11 +78,11 @@ EXPOSE 8004
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
 
-# Устанавливаем pm2
-RUN npm install -g pm2
+# Установка pm2 без глобального флага (локально в проект)
+RUN npm install pm2
 
 # Копируем pm2-конфиг
 COPY pm2.config.js /app/pm2.config.js
 
-# Стартуем сервисы
-CMD ["pm2-runtime", "pm2.config.js"]
+# Стартуем оба сервиса через локальный pm2
+CMD ["./node_modules/.bin/pm2-runtime", "pm2.config.js"]
