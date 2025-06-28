@@ -66,7 +66,7 @@ COPY tg-mcp/ .
 # Возвращаем права пользователю node
 RUN chown -R node:node /app/tg-mcp
 
-# --- Финальная настройка ---
+# -- Финальная настройка --
 WORKDIR /app
 USER node
 
