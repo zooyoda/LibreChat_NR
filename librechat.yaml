@@ -2269,8 +2269,10 @@ mcpServers:
       
   telegram:
     type: stdio
-    command: "npx"
-    args: ["ts-node", "./mcp-telegram/src/index.ts"]
+    #command: "npx"
+    #args: ["ts-node", "./mcp-telegram/src/index.ts"]
+    command: "node"
+    args: ["./mcp-telegram/dist/index.js"]
     timeout: 120000
     initTimeout: 60000
     env:
