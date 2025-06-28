@@ -2446,26 +2446,13 @@ async def get_pinned_messages(chat_id: int) -> str:
         logger.exception(f"get_pinned_messages failed (chat_id={chat_id})")
         return log_and_format_error("get_pinned_messages", e, chat_id=chat_id)
 
-
 if __name__ == "__main__":
+    import nest_asyncio
     nest_asyncio.apply()
+    import asyncio
 
-    async def main() -> None:
-        try:
-            # Start the Telethon client non-interactively
-            print("Starting Telegram client...", flush=True)
-            await client.start()
-
-            print("Telegram client started. Running MCP server...", flush=True)
-            # Use the asynchronous entrypoint instead of mcp.run()
-            await mcp.run_stdio_async()
-        except Exception as e:
-            print(f"Error starting client: {e}", file=sys.stderr, flush=True)
-            if isinstance(e, sqlite3.OperationalError) and "database is locked" in str(e):
-                print(
-                    "Database lock detected. Please ensure no other instances are running.",
-                    file=sys.stderr,
-                )
-            sys.exit(1)
+    async def main():
+        await client.start()
+        await mcp.run_http_async(port=8004)  # <--- ВАЖНО!
 
     asyncio.run(main())
