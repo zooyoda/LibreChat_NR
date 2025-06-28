@@ -41,10 +41,21 @@ USER root
 
 # Установка Python и системных зависимостей
 RUN apk update && apk add --no-cache \
-    build-base \
+    python3 \
+    py3-pip \
+    py3-cryptography \
+    py3-virtualenv \
+    py3-pillow \
+    curl \
+    gcc \
+    musl-dev \
     libffi-dev \
     openssl-dev \
-    curl
+    make \
+    build-base \
+    py3-setuptools \
+    py3-wheel \
+    py3-numpy
 
 # Работа с виртуальным окружением Python
 WORKDIR /app/tg-mcp
