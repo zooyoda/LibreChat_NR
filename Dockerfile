@@ -47,7 +47,8 @@ RUN apk update && apk add --no-cache \
     socat
 
 # Копируем исходный код telegram-mcp из готового образа
-COPY --from=ghcr.io/chigwell/telegram-mcp:latest /app /app/tg-mcp
+RUN apk add --no-cache git
+RUN git clone https://github.com/chigwell/telegram-mcp.git /app/tg-mcp
 
 # Работа с виртуальным окружением Python
 WORKDIR /app/tg-mcp
