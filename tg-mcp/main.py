@@ -2468,6 +2468,6 @@ if __name__ == "__main__":
         await client.start()
         print("Telegram client initialized!", flush=True)
         print("Starting MCP HTTP server on port 8004", flush=True)
-        await mcp.run_http_async(host='0.0.0.0', port=8004)  # Ключевое исправление!
+        await mcp.run_sse_async(host='0.0.0.0', port=8004)  # Ключевое исправление!
     
     asyncio.run(main())
