@@ -1,7 +1,7 @@
-import { StringSession } from "gramjs/sessions/index.js";
-import { TelegramClient } from "gramjs";
-import { NewMessage } from "gramjs/events/index.js";
-import { Api } from "gramjs";
+import { StringSession } from "telegram/sessions/index.js";
+import { TelegramClient } from "telegram";
+import { NewMessage } from "telegram/events/index.js";
+import { Api } from "telegram";
 import * as dotenv from "dotenv";
 
 dotenv.config();
