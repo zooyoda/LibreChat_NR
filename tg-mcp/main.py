@@ -1,3 +1,13 @@
+# 111
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+else:
+    import os
+    sys.stdout = os.fdopen(sys.stdout.fileno(), "w", 1)
+    sys.stderr = os.fdopen(sys.stderr.fileno(), "w", 1)
+# 111
 import os
 import sys
 import json
