@@ -8,8 +8,8 @@ module.exports = {
     },
     {
       name: "telegram-mcp",
-      script: "socat",
-      args: "TCP-LISTEN:8004,reuseaddr,fork EXEC:'/venv/bin/python3 main.py'",
+      script: "python3",
+      args: "-u main.py",
       cwd: "/app/tg-mcp",
       env: {
         TELEGRAM_API_ID: process.env.TELEGRAM_API_ID,
