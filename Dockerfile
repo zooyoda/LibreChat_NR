@@ -40,14 +40,14 @@ USER root
 RUN apk update && apk add --no-cache \
     python3 \
     py3-pip \
-    py3-virtualenv \
     build-base \
     libffi-dev \
     openssl-dev \
-    curl
+    curl \
+    socat
 
-# Установка 
-RUN apk add --no-cache socat
+# Копируем исходный код telegram-mcp из готового образа
+COPY --from=ghcr.io/chigwell/telegram-mcp:latest /app /app/tg-mcp
 
 # Работа с виртуальным окружением Python
 WORKDIR /app/tg-mcp
@@ -55,12 +55,8 @@ RUN python3 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 
 # Установка Python-зависимостей
-COPY tg-mcp/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir --upgrade "mcp[cli]>=1.9.4"
-
-COPY --from=ghcr.io/chigwell/telegram-mcp:latest /app /app/tg-mcp
-WORKDIR /app/tg-mcp
 
 # Возвращаем права пользователю node
 RUN chown -R node:node /app/tg-mcp
@@ -77,11 +73,11 @@ EXPOSE 8004
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
 
-# Установка pm2 без глобального флага (локально в проект)
+# Установка pm2 без глобального флага
 RUN npm install pm2
 
 # Копируем pm2-конфиг
 COPY pm2.config.js /app/pm2.config.js
 
-# Стартуем оба сервиса через локальный pm2
+# Стартуем сервисы
 CMD ["./node_modules/.bin/pm2-runtime", "pm2.config.js"]
