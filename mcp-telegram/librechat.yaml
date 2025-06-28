@@ -1,0 +1,6 @@
+mcp:
+  type: telegram
+  session_string: ${TELEGRAM_SESSION_STRING}
+  api_id: ${TELEGRAM_API_ID}
+  api_hash: ${TELEGRAM_API_HASH}
+  transport: stdio
