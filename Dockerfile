@@ -43,10 +43,9 @@ RUN apk update && apk add --no-cache \
     build-base \
     libffi-dev \
     openssl-dev \
-    curl \
-    socat
+    curl
 
-# Клонируем твой форк telegram-mcp сразу в целевую директорию
+# Копируем исходный код telegram-mcp
 COPY tg-mcp /app/tg-mcp
 
 # Работа с виртуальным окружением Python
