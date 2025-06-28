@@ -31,6 +31,20 @@ from telethon.tl.types import (
     InputPeerChannel,
 )
 import telethon.errors.rpcerrorlist
+# 1
+from fastapi import FastAPI
+from sse_starlette.sse import EventSourceResponse
+import asyncio
+
+app = FastAPI()
+
+@app.get("/sse")
+async def sse_endpoint():
+    async def event_generator():
+        while True:
+            await asyncio.sleep(1)
+            yield {"data": "Telegram MCP Active"}
+    return EventSourceResponse(event_generator())
 
 
 def json_serializer(obj):
@@ -2444,28 +2458,23 @@ async def get_pinned_messages(chat_id: int) -> str:
     except Exception as e:
         logger.exception(f"get_pinned_messages failed (chat_id={chat_id})")
         return log_and_format_error("get_pinned_messages", e, chat_id=chat_id)
+#2
+async def start_telegram_and_mcp():
+    import nest_asyncio
+    nest_asyncio.apply()
+    try:
+        print("Starting Telegram client...", flush=True)
+        await client.start()
+        print("Telegram client initialized!", flush=True)
+        print("Telegram client started. Running MCP server...", flush=True)
+        await mcp.run_stdio_async()
+    except Exception as e:
+        print(f"Error starting client: {e}", flush=True)
 
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(start_telegram_and_mcp())
 
 if __name__ == "__main__":
-    nest_asyncio.apply()
-
-    async def main() -> None:
-        try:
-            # Start the Telethon client non-interactively
-            print("Starting Telegram client...")
-            await client.start()
-            print("Telegram client initialized!")
-
-            print("Telegram client started. Running MCP server...")
-            # Use the asynchronous entrypoint instead of mcp.run()
-            await mcp.run_stdio_async()
-        except Exception as e:
-            print(f"Error starting client: {e}", file=sys.stderr)
-            if isinstance(e, sqlite3.OperationalError) and "database is locked" in str(e):
-                print(
-                    "Database lock detected. Please ensure no other instances are running.",
-                    file=sys.stderr,
-                )
-            sys.exit(1)
-
-    asyncio.run(main())
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8004)
