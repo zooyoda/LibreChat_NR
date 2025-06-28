@@ -9,7 +9,7 @@ module.exports = {
     {
       name: "telegram-mcp",
       script: "socat",
-      args: "TCP-LISTEN:8004,reuseaddr,fork EXEC:'npx -y supergateway --stdio python3 main.py',stderr",
+      args: "TCP-LISTEN:8004,reuseaddr,fork EXEC:'/venv/bin/python3 main.py'",
       cwd: "/app/tg-mcp",
       env: {
         TELEGRAM_API_ID: process.env.TELEGRAM_API_ID,
@@ -18,6 +18,5 @@ module.exports = {
         TELEGRAM_SESSION_NAME: process.env.TELEGRAM_SESSION_NAME || "anon"
       }
     }
-
   ]
 }
