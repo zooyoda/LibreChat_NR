@@ -26,15 +26,22 @@ async function main() {
     try {
       const req = JSON.parse(data.toString());
       const { method, params, id } = req;
-      if (typeof tools[method] === "function") {
-        const result = await tools[method](...(params || []));
+      if (method in tools && typeof (tools as any)[method] === "function") {
+        const fn = (tools as Record<string, (...args: any[]) => any>)[method];
+        const result = await fn(...(params || []));
         process.stdout.write(JSON.stringify({ id, result }) + "\n");
       } else {
-        process.stdout.write(JSON.stringify({ id, error: "Unknown method" }) + "\n");
-      }
-    } catch (err: any) {
-      process.stdout.write(JSON.stringify({ error: err.message }) + "\n");
-    }
+       process.stdout.write(JSON.stringify({ id, error: "Unknown method" }) + "\n");
+     }
+  //    if (typeof tools[method] === "function") {
+  //      const result = await tools[method](...(params || []));
+  //      process.stdout.write(JSON.stringify({ id, result }) + "\n");
+  //    } else {
+  //      process.stdout.write(JSON.stringify({ id, error: "Unknown method" }) + "\n");
+  //    }
+  //  } catch (err: any) {
+  //    process.stdout.write(JSON.stringify({ error: err.message }) + "\n");
+  //  }
   });
 }
 
