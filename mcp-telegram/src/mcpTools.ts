@@ -26,12 +26,16 @@ export async function forward_messages(from_chat_id: number | string, message_id
 
 // Удалить сообщение
 export async function delete_messages(chat_id: number | string, message_ids: number[]) {
-  await client.deleteMessages(chat_id, message_ids);
+  await client.deleteMessages(chat_id, { ids: message_ids });
   return { status: "ok" };
 }
 
 // Прочитать историю (отметить как прочитанное)
 export async function mark_read(chat_id: number | string, message_ids: number[]) {
-  await client.sendReadAck(chat_id, message_ids);
-  return { status: "ok" };
-}
+  await client.invoke(
+  new Api.messages.ReadHistory({
+    peer: chat_id,
+    maxId: Math.max(...message_ids),
+  })
+);
+
