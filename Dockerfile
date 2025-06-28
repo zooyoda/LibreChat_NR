@@ -2,9 +2,6 @@
 FROM node:20.19-alpine AS nodebase
 WORKDIR /app
 
-# Установка socat и Python-зависимостей
-#RUN apk add --no-cache socat python3 py3-pip
-
 # Кэшируем зависимости
 COPY package*.json ./
 COPY client/package*.json ./client/
@@ -43,19 +40,13 @@ USER root
 RUN apk update && apk add --no-cache \
     python3 \
     py3-pip \
-    py3-cryptography \
-    py3-virtualenv \
-    py3-pillow \
+    build-base \
+    libffi-dev \
+    openssl-dev \
     curl \
     gcc \
     musl-dev \
-    libffi-dev \
-    openssl-dev \
-    make \
-    build-base \
-    py3-setuptools \
-    py3-wheel \
-    py3-numpy
+    make
 
 # Работа с виртуальным окружением Python
 WORKDIR /app/tg-mcp
