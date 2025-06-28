@@ -7,6 +7,7 @@ COPY package*.json ./
 COPY client/package*.json ./client/
 COPY api/package*.json ./api/
 COPY mcp-github-api/package*.json ./mcp-github-api/
+COPY mcp-telegram/package*.json ./mcp-telegram/
 
 # Копируем исходный код (все файлы проекта)
 COPY . .
@@ -23,6 +24,11 @@ RUN npm ci --include=dev
 # Устанавливаем зависимости для mcp-github-api
 WORKDIR /app/mcp-github-api
 RUN npm install --omit=dev
+
+# Устанавливаем зависимости и собираем MCP Telegram
+WORKDIR /app/mcp-telegram
+RUN npm install --omit=dev
+RUN npm run build
 
 # Возвращаемся в корень
 WORKDIR /app
