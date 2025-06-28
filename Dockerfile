@@ -47,7 +47,7 @@ RUN apk update && apk add --no-cache \
     socat
 
 # Клонируем твой форк telegram-mcp сразу в целевую директорию
-RUN git clone https://github.com/zooyoda/telegram-mcp.git /app/tg-mcp
+COPY tg-mcp /app/tg-mcp
 
 # Работа с виртуальным окружением Python
 WORKDIR /app/tg-mcp
