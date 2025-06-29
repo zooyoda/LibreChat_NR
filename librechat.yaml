@@ -2276,9 +2276,7 @@ mcpServers:
     timeout: 120000
     initTimeout: 60000
     env:
-      TELEGRAM_SESSION_STRING: "${TELEGRAM_SESSION_STRING}"
-      TELEGRAM_API_ID: "${TELEGRAM_API_ID}"
-      TELEGRAM_API_HASH: "${TELEGRAM_API_HASH}"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
     
     #type: telegram
     #args: ["./mcp-telegram/src/index.ts"]
