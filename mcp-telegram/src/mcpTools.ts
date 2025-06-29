@@ -26,7 +26,8 @@ export async function forward_messages(from_chat_id: number | string, message_id
 
 // Удалить сообщение
 export async function delete_messages(chat_id: number | string, message_ids: number[]) {
-  await client.deleteMessages({ peer: chat_id, ids: message_ids });
+  // Третий аргумент можно не указывать, если не нужен "revoke"
+  await client.deleteMessages(chat_id, message_ids);
   return { status: "ok" };
 }
 
