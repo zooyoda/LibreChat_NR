@@ -33,9 +33,10 @@ export async function delete_messages(chat_id: number | string, message_ids: num
 // Прочитать историю (отметить как прочитанное)
 export async function mark_read(chat_id: number | string, message_ids: number[]) {
   await client.invoke(
-  new Api.messages.ReadHistory({
-    peer: chat_id,
-    maxId: Math.max(...message_ids),
-  })
-);
-
+    new Api.messages.ReadHistory({
+      peer: chat_id,
+      maxId: Math.max(...message_ids),
+    })
+  );
+  return { status: "ok" };
+}
