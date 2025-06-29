@@ -26,7 +26,7 @@ export async function forward_messages(from_chat_id: number | string, message_id
 
 // Удалить сообщение
 export async function delete_messages(chat_id: number | string, message_ids: number[]) {
-  await client.deleteMessages(chat_id, { ids: message_ids });
+  await client.deleteMessages({ peer: chat_id, ids: message_ids });
   return { status: "ok" };
 }
 
