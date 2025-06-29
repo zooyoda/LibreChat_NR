@@ -19,12 +19,10 @@ const client = new TelegramClient(new StringSession(sessionString), apiId, apiHa
 });
 
 export async function startClient() {
-  await client.start({
-    phoneNumber: async () => "",
-    password: async () => "",
-    phoneCode: async () => "",
-    onError: (err) => console.error("TelegramClient error", err)
-  });
+  if (!client.connected) {
+    await client.connect();
+    console.log("✅ Telegram client connected!");
+  }
 }
 
 export { client, Api, NewMessage };
