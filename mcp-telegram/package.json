@@ -1,6 +1,6 @@
 {
   "name": "mcp-telegram",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "telegram": "^2.22.2",
+    "node-telegram-bot-api": "^0.61.0",
     "dotenv": "^16.0.0"
   },
   "devDependencies": {
