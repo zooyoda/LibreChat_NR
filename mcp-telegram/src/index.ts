@@ -49,7 +49,7 @@ async function main() {
   process.stdout.write(JSON.stringify(capabilities) + "\n");
 
   // Подписка на входящие сообщения
-  bot.on("message", (msg) => {
+  bot.on("message", (msg: any) => {
     // Отправляем событие в LibreChat
     const payload = {
       event: "new_message",
