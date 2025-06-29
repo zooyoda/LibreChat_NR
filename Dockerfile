@@ -18,17 +18,18 @@ RUN chown -R node:node /app
 # Переключаемся на пользователя node
 USER node
 
-# Устанавливаем ВСЕ зависимости (включая dev) для сборки
+# Устанавливаем ВСЕ зависимости (включая dev) для сборки во всех подпроектах
 RUN npm ci --include=dev
 
-# Устанавливаем зависимости для mcp-github-api
+# MCP-GITHUB-API: если нужен только рантайм, можно оставить --omit=dev
 WORKDIR /app/mcp-github-api
 RUN npm install --omit=dev
 
-# Устанавливаем зависимости и собираем MCP Telegram
+# MCP-TELEGRAM: для сборки нужны dev-зависимости!
 WORKDIR /app/mcp-telegram
-RUN npm install --omit=dev
+RUN npm install # <--- без --omit=dev
 RUN npm run build
+# (опционально после сборки: RUN npm prune --production)
 
 # Возвращаемся в корень
 WORKDIR /app
