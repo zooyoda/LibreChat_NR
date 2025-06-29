@@ -1,43 +1,43 @@
-import { startClient, client, NewMessage } from "./telegramClient.js";
+import { bot } from "./telegramClient.js";
 import * as tools from "./mcpTools.js";
 
-// Описание доступных инструментов (tools) для объявления о готовности MCP
+// Объявление инструментов для LibreChat MCP
 const capabilities = {
   tools: {
     send_message: {
-      description: "Отправить сообщение в чат/канал Telegram от имени пользователя",
+      description: "Отправить сообщение в чат/канал Telegram от имени бота",
       params: [
         { name: "chat_id", type: "string|number", required: true, description: "ID или username чата/канала" },
         { name: "message", type: "string", required: true, description: "Текст сообщения" }
       ]
     },
     get_messages: {
-      description: "Получить последние сообщения из чата/канала",
+      description: "Получить последние входящие сообщения для бота (ограничение Bot API)",
       params: [
-        { name: "chat_id", type: "string|number", required: true, description: "ID или username чата/канала" },
-        { name: "limit", type: "number", required: false, description: "Максимальное число сообщений (по умолчанию 20)" }
+        { name: "chat_id", type: "string|number", required: true },
+        { name: "limit", type: "number", required: false }
       ]
     },
     forward_messages: {
       description: "Переслать сообщения в другой чат/канал",
       params: [
-        { name: "from_chat_id", type: "string|number", required: true, description: "ID или username исходного чата/канала" },
-        { name: "message_ids", type: "array", required: true, description: "Массив ID пересылаемых сообщений" },
-        { name: "to_chat_id", type: "string|number", required: true, description: "ID или username целевого чата/канала" }
+        { name: "from_chat_id", type: "string|number", required: true },
+        { name: "message_ids", type: "array", required: true },
+        { name: "to_chat_id", type: "string|number", required: true }
       ]
     },
     delete_messages: {
-      description: "Удалить сообщения",
+      description: "Удалить сообщения (только если бот автор)",
       params: [
-        { name: "chat_id", type: "string|number", required: true, description: "ID или username чата/канала" },
-        { name: "message_ids", type: "array", required: true, description: "Массив ID удаляемых сообщений" }
+        { name: "chat_id", type: "string|number", required: true },
+        { name: "message_ids", type: "array", required: true }
       ]
     },
     mark_read: {
-      description: "Отметить сообщения как прочитанные",
+      description: "Отметить сообщения как прочитанные (не поддерживается Bot API, возвращает OK)",
       params: [
-        { name: "chat_id", type: "string|number", required: true, description: "ID или username чата/канала" },
-        { name: "message_ids", type: "array", required: true, description: "Массив ID сообщений для отметки как прочитанные" }
+        { name: "chat_id", type: "string|number", required: true },
+        { name: "message_ids", type: "array", required: true }
       ]
     }
   }
@@ -45,26 +45,25 @@ const capabilities = {
 
 // MCP stdio loop
 async function main() {
-  await startClient();
-
   // Объявляем инструменты (tools/capabilities) — сигнал LibreChat о готовности MCP
   process.stdout.write(JSON.stringify(capabilities) + "\n");
 
-  // Слушаем новые сообщения и выводим их в stdout как MCP event
-  client.addEventHandler((event: any) => {
-    const msg = event.message;
+  // Подписка на входящие сообщения
+  bot.on("message", (msg) => {
+    // Отправляем событие в LibreChat
     const payload = {
       event: "new_message",
       data: {
-        id: msg.id,
-        chatId: msg.chatId,
-        senderId: msg.senderId,
-        message: msg.message,
-        date: msg.date
+        message_id: msg.message_id,
+        chat: msg.chat,
+        from: msg.from,
+        date: msg.date,
+        text: msg.text,
+        // Можно добавить другие поля по необходимости
       }
     };
     process.stdout.write(JSON.stringify(payload) + "\n");
-  }, new NewMessage({}));
+  });
 
   // MCP stdio loop: получаем команды, вызываем tool, возвращаем результат
   process.stdin.on("data", async (data) => {
