@@ -1,5 +1,6 @@
 import { bot } from "./telegramClient.js";
 import * as tools from "./mcpTools.js";
+import type TelegramBot from "node-telegram-bot-api";
 
 // Объявление инструментов для LibreChat MCP
 const capabilities = {
@@ -49,7 +50,7 @@ async function main() {
   process.stdout.write(JSON.stringify(capabilities) + "\n");
 
   // Подписка на входящие сообщения
-  bot.on("message", (msg: any) => {
+  bot.on("message", (msg: TelegramBot.Message) => {
     // Отправляем событие в LibreChat
     const payload = {
       event: "new_message",
