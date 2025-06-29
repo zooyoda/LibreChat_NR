@@ -26,8 +26,12 @@ export async function forward_messages(from_chat_id: number | string, message_id
 
 // Удалить сообщение
 export async function delete_messages(chat_id: number | string, message_ids: number[]) {
-  // Третий аргумент можно не указывать, если не нужен "revoke"
-  await client.deleteMessages(chat_id, message_ids);
+  await client.invoke(
+    new Api.messages.DeleteMessages({
+      id: message_ids,
+      revoke: true,
+    })
+  );
   return { status: "ok" };
 }
 
