@@ -5,6 +5,10 @@ import type TelegramBot from "node-telegram-bot-api";
 // Объявление инструментов для LibreChat MCP
 const capabilities = {
   tools: {
+    get_bot_info: {
+      description: "Получить информацию о боте",
+      params: []
+    },
     send_message: {
       description: "Отправить сообщение в чат/канал Telegram от имени бота",
       params: [
@@ -46,12 +50,11 @@ const capabilities = {
 
 // MCP stdio loop
 async function main() {
-  // Объявляем инструменты (tools/capabilities) — сигнал LibreChat о готовности MCP
+  // ВАЖНО: capabilities выводим до любых асинхронных операций!
   process.stdout.write(JSON.stringify(capabilities) + "\n");
 
   // Подписка на входящие сообщения
   bot.on("message", (msg: TelegramBot.Message) => {
-    // Отправляем событие в LibreChat
     const payload = {
       event: "new_message",
       data: {
@@ -60,7 +63,6 @@ async function main() {
         from: msg.from,
         date: msg.date,
         text: msg.text,
-        // Можно добавить другие поля по необходимости
       }
     };
     process.stdout.write(JSON.stringify(payload) + "\n");
