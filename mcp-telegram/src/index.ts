@@ -48,6 +48,12 @@ const capabilities = {
   }
 };
 
+// Информация о сервере (обязательное поле serverInfo)
+const serverInfo = {
+  name: "telegram-mcp",
+  version: "1.0.0"
+};
+
 async function main() {
   // Подписка на входящие сообщения
   bot.on("message", (msg: TelegramBot.Message) => {
@@ -64,19 +70,23 @@ async function main() {
     process.stdout.write(JSON.stringify(payload) + "\n");
   });
 
-  // MCP stdio loop: теперь поддерживаем initialize по JSON-RPC 2.0
+  // MCP stdio loop: поддержка initialize по JSON-RPC 2.0
   process.stdin.on("data", async (data) => {
     try {
       const req = JSON.parse(data.toString());
       const { method, params, id } = req;
 
-      // MCP v2: поддержка initialize
+      // MCP v2: поддержка initialize — возвращаем все обязательные поля!
       if (method === "initialize") {
         process.stdout.write(
           JSON.stringify({
             jsonrpc: "2.0",
             id,
-            result: capabilities
+            result: {
+              protocolVersion: "1.0",
+              capabilities,
+              serverInfo
+            }
           }) + "\n"
         );
         return;
