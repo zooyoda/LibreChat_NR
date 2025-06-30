@@ -18,17 +18,16 @@ export async function forward_messages(
   to_chat_id: number | string
 ) {
   for (const message_id of message_ids) {
-    // Приводим к числу только если это возможно, иначе пропускаем
-    const msgIdNum = typeof message_id === "string" && /^\d+$/.test(message_id)
-      ? Number(message_id)
-      : typeof message_id === "number"
-        ? message_id
-        : null;
-
+    let msgIdNum: number | null = null;
+    if (typeof message_id === "number") {
+      msgIdNum = message_id;
+    } else if (typeof message_id === "string" && /^\d+$/.test(message_id)) {
+      msgIdNum = Number(message_id);
+    }
     if (typeof msgIdNum === "number" && !isNaN(msgIdNum)) {
       await bot.forwardMessage(to_chat_id, from_chat_id, msgIdNum);
     }
-    // Если message_id некорректный (например, не число), просто игнорируем
+    // Если message_id некорректный — пропускаем без ошибки
   }
   return { status: "ok" };
 }
@@ -36,18 +35,14 @@ export async function forward_messages(
 // Удалить сообщения (только если бот автор)
 export async function delete_messages(chat_id: number | string, message_ids: (number | string)[]) {
   for (const message_id of message_ids) {
-    try {
-      const msgIdNum = typeof message_id === "string" && /^\d+$/.test(message_id)
-        ? Number(message_id)
-        : typeof message_id === "number"
-          ? message_id
-          : null;
-
-      if (typeof msgIdNum === "number" && !isNaN(msgIdNum)) {
-        await bot.deleteMessage(chat_id, msgIdNum.toString());
-      }
-    } catch (err) {
-      // Bot API выбрасывает ошибку, если бот не автор сообщения — игнорируем
+    let msgIdNum: number | null = null;
+    if (typeof message_id === "number") {
+      msgIdNum = message_id;
+    } else if (typeof message_id === "string" && /^\d+$/.test(message_id)) {
+      msgIdNum = Number(message_id);
+    }
+    if (typeof msgIdNum === "number" && !isNaN(msgIdNum)) {
+      await bot.deleteMessage(chat_id, msgIdNum.toString());
     }
   }
   return { status: "ok" };
