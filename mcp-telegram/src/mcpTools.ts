@@ -18,9 +18,17 @@ export async function forward_messages(
   to_chat_id: number | string
 ) {
   for (const message_id of message_ids) {
-    // Явно приводим к числу, если это строка
-    const msgIdNum: number = typeof message_id === "string" ? parseInt(message_id, 10) : message_id;
-    await bot.forwardMessage(to_chat_id, from_chat_id, msgIdNum);
+    // Приводим к числу только если это возможно, иначе пропускаем
+    const msgIdNum = typeof message_id === "string" && /^\d+$/.test(message_id)
+      ? Number(message_id)
+      : typeof message_id === "number"
+        ? message_id
+        : null;
+
+    if (typeof msgIdNum === "number" && !isNaN(msgIdNum)) {
+      await bot.forwardMessage(to_chat_id, from_chat_id, msgIdNum);
+    }
+    // Если message_id некорректный (например, не число), просто игнорируем
   }
   return { status: "ok" };
 }
@@ -29,9 +37,15 @@ export async function forward_messages(
 export async function delete_messages(chat_id: number | string, message_ids: (number | string)[]) {
   for (const message_id of message_ids) {
     try {
-      // Для deleteMessage message_id должен быть строкой, но числового значения!
-      const msgIdNum: number = typeof message_id === "string" ? parseInt(message_id, 10) : message_id;
-      await bot.deleteMessage(chat_id, msgIdNum.toString());
+      const msgIdNum = typeof message_id === "string" && /^\d+$/.test(message_id)
+        ? Number(message_id)
+        : typeof message_id === "number"
+          ? message_id
+          : null;
+
+      if (typeof msgIdNum === "number" && !isNaN(msgIdNum)) {
+        await bot.deleteMessage(chat_id, msgIdNum.toString());
+      }
     } catch (err) {
       // Bot API выбрасывает ошибку, если бот не автор сообщения — игнорируем
     }
