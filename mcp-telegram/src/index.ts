@@ -1,8 +1,7 @@
-import { bot } from "./telegramClient.js";
+import { botReady } from "./telegramClient.js";
 import * as tools from "./mcpTools.js";
 import type TelegramBot from "node-telegram-bot-api";
 
-// capabilities объявляем как раньше
 const capabilities = {
   tools: {
     get_bot_info: {
@@ -48,14 +47,14 @@ const capabilities = {
   }
 };
 
-// Информация о сервере (обязательное поле serverInfo)
 const serverInfo = {
   name: "telegram-mcp",
   version: "1.0.0"
 };
 
 async function main() {
-  // Подписка на входящие сообщения
+  const bot = await botReady;
+
   bot.on("message", (msg: TelegramBot.Message) => {
     const payload = {
       event: "new_message",
@@ -70,13 +69,11 @@ async function main() {
     process.stdout.write(JSON.stringify(payload) + "\n");
   });
 
-  // MCP stdio loop: поддержка initialize по JSON-RPC 2.0
   process.stdin.on("data", async (data) => {
     try {
       const req = JSON.parse(data.toString());
       const { method, params, id } = req;
 
-      // MCP v2: поддержка initialize — возвращаем все обязательные поля!
       if (method === "initialize") {
         process.stdout.write(
           JSON.stringify({
@@ -92,7 +89,6 @@ async function main() {
         return;
       }
 
-      // Остальные методы — как раньше
       if (method in tools && typeof (tools as any)[method] === "function") {
         const fn = (tools as Record<string, (...args: any[]) => any>)[method];
         const result = await fn(...(params || []));
