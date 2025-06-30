@@ -1,4 +1,4 @@
-import { botReady } from "./telegramClient.js";
+import { bot } from "./telegramClient.js";
 import * as tools from "./mcpTools.js";
 import type TelegramBot from "node-telegram-bot-api";
 
