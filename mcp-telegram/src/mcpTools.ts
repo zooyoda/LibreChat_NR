@@ -29,9 +29,10 @@ export async function forward_messages(
 // Удалить сообщения (только если бот автор)
 export async function delete_messages(chat_id: number | string, message_ids: (number | string)[]) {
   for (const message_id of message_ids) {
-    // message_id для deleteMessage должен быть строкой
+    // message_id для deleteMessage должен быть строкой, но числовое значение!
     try {
-      await bot.deleteMessage(chat_id, String(typeof message_id === "string" ? Number(message_id) : message_id));
+      const msgIdNum = typeof message_id === "string" ? Number(message_id) : message_id;
+      await bot.deleteMessage(chat_id, String(msgIdNum));
     } catch (err) {
       // Bot API выбрасывает ошибку, если бот не автор сообщения — игнорируем
     }
