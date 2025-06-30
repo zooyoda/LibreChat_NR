@@ -83,7 +83,7 @@ async function main() {
             jsonrpc: "2.0",
             id,
             result: {
-              protocolVersion: "2.0",
+              protocolVersion: "2025-03-26",
               capabilities,
               serverInfo
             }
