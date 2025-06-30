@@ -2,7 +2,7 @@ import { bot } from "./telegramClient.js";
 import * as tools from "./mcpTools.js";
 import type TelegramBot from "node-telegram-bot-api";
 
-// Объявление инструментов для LibreChat MCP
+// capabilities объявляем как раньше
 const capabilities = {
   tools: {
     get_bot_info: {
@@ -48,11 +48,7 @@ const capabilities = {
   }
 };
 
-// MCP stdio loop
 async function main() {
-  // ВАЖНО: capabilities выводим до любых асинхронных операций!
-  process.stdout.write(JSON.stringify(capabilities) + "\n");
-
   // Подписка на входящие сообщения
   bot.on("message", (msg: TelegramBot.Message) => {
     const payload = {
@@ -68,11 +64,25 @@ async function main() {
     process.stdout.write(JSON.stringify(payload) + "\n");
   });
 
-  // MCP stdio loop: получаем команды, вызываем tool, возвращаем результат
+  // MCP stdio loop: теперь поддерживаем initialize по JSON-RPC 2.0
   process.stdin.on("data", async (data) => {
     try {
       const req = JSON.parse(data.toString());
       const { method, params, id } = req;
+
+      // MCP v2: поддержка initialize
+      if (method === "initialize") {
+        process.stdout.write(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            result: capabilities
+          }) + "\n"
+        );
+        return;
+      }
+
+      // Остальные методы — как раньше
       if (method in tools && typeof (tools as any)[method] === "function") {
         const fn = (tools as Record<string, (...args: any[]) => any>)[method];
         const result = await fn(...(params || []));
