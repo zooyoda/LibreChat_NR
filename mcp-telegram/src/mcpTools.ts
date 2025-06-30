@@ -7,6 +7,11 @@ function toNumber(val: string | number): number | null {
   return null;
 }
 
+// Получить информацию о боте
+export async function get_bot_info() {
+  return await bot.getMe();
+}
+
 // Отправить сообщение
 export async function send_message(chat_id: number | string, message: string) {
   await bot.sendMessage(chat_id, message);
@@ -45,7 +50,6 @@ export async function delete_messages(
 
   for (const msgIdNum of validIds) {
     try {
-      // ВАЖНО: messageId должен быть строго number!
       await bot.deleteMessage(chat_id, msgIdNum);
     } catch {
       // Игнорируем ошибки удаления
