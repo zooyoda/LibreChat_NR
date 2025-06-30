@@ -1,4 +1,4 @@
-import { bot } from "./telegramClient.js";
+import { botReady } from "./telegramClient.js";
 
 // Вспомогательная функция для строгой фильтрации числовых message_id
 function toNumber(val: string | number): number | null {
