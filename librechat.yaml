@@ -2267,7 +2267,7 @@ mcpServers:
     env:
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
       
-  telegram-bot:
+  tg-mcp:
     type: stdio
     #command: "npx"
     #args: ["ts-node", "./mcp-telegram/src/index.ts"]
