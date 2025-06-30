@@ -9,6 +9,14 @@ if (!botToken) {
   throw new Error("TELEGRAM_BOT_TOKEN must be set in environment");
 }
 
-const bot = new TelegramBot(botToken, { polling: true });
+// Экспортируем промис, который резолвится после инициализации бота с polling
+let bot: TelegramBot;
 
-export { bot };
+const botReady: Promise<TelegramBot> = new Promise((resolve) => {
+  setTimeout(() => {
+    bot = new TelegramBot(botToken, { polling: true });
+    resolve(bot);
+  }, 5000); // задержка 5 секунд
+});
+
+export { botReady, bot };
