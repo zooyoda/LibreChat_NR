@@ -24,13 +24,11 @@ export async function forward_messages(
   message_ids: (number | string)[],
   to_chat_id: number | string
 ) {
-  // Строго фильтруем только числа
   const validIds: number[] = message_ids
     .map(toNumber)
     .filter((id): id is number => typeof id === "number" && Number.isFinite(id));
 
   for (const msgIdNum of validIds) {
-    // TS теперь точно знает, что msgIdNum — number
     await bot.forwardMessage(to_chat_id, from_chat_id, msgIdNum);
   }
   return { status: "ok" };
@@ -47,7 +45,8 @@ export async function delete_messages(
 
   for (const msgIdNum of validIds) {
     try {
-      await bot.deleteMessage(chat_id, msgIdNum.toString());
+      // ВАЖНО: messageId должен быть строго number!
+      await bot.deleteMessage(chat_id, msgIdNum);
     } catch {
       // Игнорируем ошибки удаления
     }
