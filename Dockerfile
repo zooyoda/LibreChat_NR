@@ -45,6 +45,8 @@ COPY librechat.yaml /app/librechat.yaml
 
 EXPOSE 3080
 
+EXPOSE 8004
+
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
 
