@@ -46,11 +46,7 @@ const capabilities = {
     }
   }
 };
-
-const serverInfo = {
-  name: "telegram-mcp",
-  version: "1.0.0"
-};
+const serverInfo = { name: "telegram-mcp", version: "1.0.0" };
 
 async function main() {
   const bot = await botReady;
