@@ -20,7 +20,7 @@ app.post("/telegram-webhook", async (req, res) => {
 // Healthcheck (по желанию)
 app.get("/", (req, res) => res.send("OK"));
 
-const PORT = process.env.PORT || 3080;
+const PORT = process.env.PORT || 8004;
 app.listen(PORT, () => {
   console.log(`Telegram MCP webhook server listening on port ${PORT}`);
   console.log(`Webhook URL: ${webhookUrl}`);
