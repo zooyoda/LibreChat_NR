@@ -2250,13 +2250,6 @@ memory:
   tokenLimit: 4096
   messageWindowSize: 20
 
-# MCP (Model Context Protocol) пример секции (опционально, если используете MCP)
-#mcpServers:
-#  everything:
-#    url: http://localhost:3001/sse
-#    timeout: 30000
-#    initTimeout: 10000
-#    serverInstructions: true
 mcpServers:
   github-api:
     type: stdio
@@ -2267,21 +2260,11 @@ mcpServers:
     env:
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
       
-  tg-mcp:
-    type: stdio
-    #command: "npx"
-    #args: ["ts-node", "./mcp-telegram/src/index.ts"]
-    command: "node"
-    args: ["./mcp-telegram/dist/index.js"]
-    timeout: 120000
-    initTimeout: 60000
-    env:
-      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
-    
-    #type: telegram
-    #args: ["./mcp-telegram/src/index.ts"]
-    #session_string: ${TELEGRAM_SESSION_STRING}
-    #api_id: ${TELEGRAM_API_ID}
-    #api_hash: ${TELEGRAM_API_HASH}
-    #transport: stdio
-
+ # tg-mcp:
+ #   type: stdio
+ #   command: "node"
+ #   args: ["./mcp-telegram/dist/index.js"]
+ #   timeout: 120000
+ #   initTimeout: 60000
+ #   env:
+ #     TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
