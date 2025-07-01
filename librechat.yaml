@@ -2268,7 +2268,7 @@ mcpServers:
  #   initTimeout: 60000
  #   env:
  #     TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
-   telegram-bot:
-     type: remote
-     url: "https://telegram-mcp-neuralrunner.amvera.io/mcp"   # Если идёт через внешний прокси/Ingress
-     timeout: 60000
+ #  telegram-bot:
+ #    type: remote
+ #    url: "https://telegram-mcp-neuralrunner.amvera.io/mcp"   # Если идёт через внешний прокси/Ingress
+ #    timeout: 60000
