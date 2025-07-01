@@ -3,8 +3,15 @@ import * as dotenv from "dotenv";
 
 dotenv.config();
 
+console.log("Env variables:", Object.keys(process.env));
+console.log("TELEGRAM_WEBHOOK_URL:", process.env.TELEGRAM_WEBHOOK_URL);
+
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
-const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL; // задайте в окружении Amvera
+
+// Явно задаём webhookUrl: используем переменную окружения или дефолт для Amvera
+const webhookUrl =
+  process.env.TELEGRAM_WEBHOOK_URL ||
+  "https://nrlibre-neuralrunner.amvera.io/telegram-webhook";
 
 if (!botToken) {
   throw new Error("TELEGRAM_BOT_TOKEN must be set in environment");
@@ -22,6 +29,7 @@ const bot = new TelegramBot(botToken, {
 // Устанавливаем webhook при старте
 const botReady = (async () => {
   await bot.setWebHook(webhookUrl);
+  console.log("Webhook set to:", webhookUrl);
   return bot;
 })();
 
