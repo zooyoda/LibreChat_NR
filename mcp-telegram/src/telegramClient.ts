@@ -22,7 +22,7 @@ if (!webhookUrl) {
 
 const bot = new TelegramBot(botToken, {
   webHook: {
-    port: Number(process.env.PORT) || 3080, // порт, который слушает Express/Amvera
+    port: Number(process.env.PORT) || 8004, // порт, который слушает Express/Amvera
   },
 });
 
