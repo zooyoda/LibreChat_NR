@@ -2,23 +2,23 @@ FROM node:20.19-alpine
 
 WORKDIR /app
 
-# Копируем package.json файлы для кэширования слоев
+# Копируем package.json для всех подпроектов
 COPY package*.json ./
 COPY client/package*.json ./client/
 COPY api/package*.json ./api/
 COPY mcp-github-api/package*.json ./mcp-github-api/
 COPY mcp-telegram/package*.json ./mcp-telegram/
+COPY sequentialthinking-mcp/package*.json ./sequentialthinking-mcp/
 
-# Копируем исходный код (все файлы проекта)
+# Копируем исходный код
 COPY . .
 
-# ВАЖНО: выставляем права на папку /app и её содержимое
+# Выставляем права
 RUN chown -R node:node /app
 
-# Переключаемся на пользователя node
 USER node
 
-# Устанавливаем ВСЕ зависимости (включая dev) для сборки во всех подпроектах
+# Устанавливаем dev-зависимости для сборки всего проекта
 RUN npm ci --include=dev
 
 # MCP-GITHUB-API: если нужен только рантайм, можно оставить --omit=dev
@@ -27,20 +27,21 @@ RUN npm install --omit=dev
 
 # MCP-TELEGRAM: для сборки нужны dev-зависимости!
 WORKDIR /app/mcp-telegram
-RUN npm install # <--- без --omit=dev
+RUN npm install
 RUN npm run build
-# (опционально после сборки: RUN npm prune --production)
 
-# Возвращаемся в корень
+# MCP-SEQUENTIALTHINKING: сборка и установка production-зависимостей
+WORKDIR /app/sequentialthinking-mcp
+RUN npm install # dev-зависимости нужны для сборки
+RUN npm run build
+RUN npm prune --omit=dev
+
+# Вернуться в корень, собрать фронтенд и подготовить окружение LibreChat
 WORKDIR /app
-
-# Собираем фронтенд
 RUN npm run frontend
-
-# Создаем необходимые директории (права уже будут корректные)
 RUN mkdir -p /app/client/public/images /app/api/logs
 
-# копируем librechat.yaml (если нужно — уже в правильного пользователя)
+# Копируем librechat.yaml
 COPY librechat.yaml /app/librechat.yaml
 
 EXPOSE 3080
