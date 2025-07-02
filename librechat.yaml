@@ -2260,7 +2260,7 @@ mcpServers:
     env:
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
 
- sequential-thinking:
+  sequential-thinking:
     type: stdio
     command: "node"
     args: ["./sequentialthinking-mcp/dist/index.js"]
