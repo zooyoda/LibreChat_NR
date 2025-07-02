@@ -2259,6 +2259,15 @@ mcpServers:
     initTimeout: 30000
     env:
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
+
+ sequential-thinking:
+    type: stdio
+    command: "node"
+    args: ["./sequentialthinking-mcp/dist/index.js"]
+    timeout: 60000
+    initTimeout: 30000
+    # env:
+    #   DISABLE_THOUGHT_LOGGING: "true" # если нужно отключить логи     
       
  # tg-mcp:
  #   type: stdio
