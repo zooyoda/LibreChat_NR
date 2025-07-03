@@ -2267,7 +2267,16 @@ mcpServers:
     timeout: 60000
     initTimeout: 30000
     # env:
-    #   DISABLE_THOUGHT_LOGGING: "true" # если нужно отключить логи     
+    #   DISABLE_THOUGHT_LOGGING: "true" # если нужно отключить логи
+
+  context7:
+    type: stdio
+    command: "node"
+    args: ["./mcp-context7/dist/index.js", "--transport", "stdio"]
+    timeout: 60000
+    initTimeout: 30000
+    env:
+      NODE_ENV: "production"  
       
  # tg-mcp:
  #   type: stdio
