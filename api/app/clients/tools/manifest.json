@@ -22,7 +22,7 @@
         "description": "WordPress admin password for JWT authentication"
       }
     ],
-    "authenticated": false,
+    "authenticated": true,
     "isAuthRequired": true
   },
   {
