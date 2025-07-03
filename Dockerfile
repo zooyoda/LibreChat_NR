@@ -9,6 +9,7 @@ COPY api/package*.json ./api/
 COPY mcp-github-api/package*.json ./mcp-github-api/
 COPY mcp-telegram/package*.json ./mcp-telegram/
 COPY sequentialthinking-mcp/package*.json ./sequentialthinking-mcp/
+COPY mcp-context7/package*.json ./mcp-context7/
 
 # Копируем исходный код
 COPY . .
@@ -35,6 +36,12 @@ WORKDIR /app/sequentialthinking-mcp
 RUN npm install # dev-зависимости нужны для сборки
 RUN npm run build
 RUN npm prune --omit=dev
+
+# MCP-CONTEXT7: сборка TypeScript и установка production-зависимостей
+WORKDIR /app/mcp-context7
+RUN npm install # dev-зависимости нужны для TypeScript сборки
+RUN npm run build # компиляция TypeScript в JavaScript
+RUN npm prune --omit=dev # удаляем dev-зависимости после сборки
 
 # Вернуться в корень, собрать фронтенд и подготовить окружение LibreChat
 WORKDIR /app
