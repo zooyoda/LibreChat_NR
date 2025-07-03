@@ -234,7 +234,7 @@
     "pluginKey": "flux",
     "description": "Generate images using text with the Flux API.",
     "icon": "https://blackforestlabs.ai/wp-content/uploads/2024/07/bfl_logo_retraced_blk.png",
-    "isAuthRequired": "true",
+    "isAuthRequired": true,
     "authConfig": [
       {
         "authField": "FLUX_API_KEY",
