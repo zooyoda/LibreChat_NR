@@ -29,7 +29,6 @@ RUN apk add --no-cache \
     ttf-freefont \
     wget \
     xvfb-run \
-    # Дополнительные зависимости для Playwright
     gcompat \
     libc6-compat \
     libxcomposite \
@@ -37,7 +36,12 @@ RUN apk add --no-cache \
     libxext \
     libxi \
     libxtst \
+    # Добавляем sudo для установки Playwright зависимостей
+    sudo \
     && rm -rf /var/cache/apk/*
+
+# Настройка sudo для node пользователя
+RUN echo "node ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 USER node
 
@@ -65,14 +69,16 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# MCP-FETCHER: Используем системный Chromium вместо Playwright
+# MCP-FETCHER: Устанавливаем браузеры Playwright
 WORKDIR /app/mcp-fetcher
 RUN npm install
-RUN npm run build
 
-# НЕ устанавливаем браузеры Playwright - используем системный Chromium
-# УДАЛЕНО: RUN npx playwright install chromium
-# УДАЛЕНО: RUN npx playwright install-deps chromium
+# Устанавливаем браузеры Playwright
+RUN npx playwright install chromium
+RUN sudo npx playwright install-deps chromium
+
+# Собираем проект
+RUN npm run build
 
 # Вернуться в корень
 WORKDIR /app
@@ -86,10 +92,5 @@ EXPOSE 3080
 
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
-
-# Переменные окружения для использования системного Chromium
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
-ENV PLAYWRIGHT_CHROMIUM_HEADLESS=true
-ENV PLAYWRIGHT_CHROMIUM_ARGS="--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security"
 
 CMD ["node", "api/server/index.js"]
