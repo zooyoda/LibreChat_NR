@@ -2282,11 +2282,14 @@ mcpServers:
     type: stdio
     command: "node"
     args: ["./mcp-fetcher/build/index.js"]
-    timeout: 60000
-    initTimeout: 30000
+    timeout: 180000  # Увеличили timeout
+    initTimeout: 60000
     env:
       NODE_ENV: "production"
-      PLAYWRIGHT_BROWSERS_PATH: "/app/mcp-fetcher/node_modules/.cache/ms-playwright"    
+      PLAYWRIGHT_BROWSERS_PATH: "/app/mcp-fetcher/node_modules/.cache/ms-playwright"
+      PLAYWRIGHT_CHROMIUM_HEADLESS: "true"
+      PLAYWRIGHT_CHROMIUM_ARGS: "--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security"
+      DEBUG: "pw:api"  # Для отладки 
       
  # tg-mcp:
  #   type: stdio
