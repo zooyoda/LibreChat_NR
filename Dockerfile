@@ -36,12 +36,7 @@ RUN apk add --no-cache \
     libxext \
     libxi \
     libxtst \
-    # Добавляем sudo для установки Playwright зависимостей
-    sudo \
     && rm -rf /var/cache/apk/*
-
-# Настройка sudo для node пользователя
-RUN echo "node ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 USER node
 
@@ -69,13 +64,14 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# MCP-FETCHER: Устанавливаем браузеры Playwright
+# MCP-FETCHER: Устанавливаем только браузеры Playwright
 WORKDIR /app/mcp-fetcher
 RUN npm install
 
-# Устанавливаем браузеры Playwright
+# Устанавливаем ТОЛЬКО браузеры Playwright (без системных зависимостей)
 RUN npx playwright install chromium
-RUN sudo npx playwright install-deps chromium
+
+# УДАЛЕНО: RUN sudo npx playwright install-deps chromium
 
 # Собираем проект
 RUN npm run build
