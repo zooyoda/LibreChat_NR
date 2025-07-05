@@ -2288,7 +2288,7 @@ mcpServers:
       NODE_ENV: "production"
       PLAYWRIGHT_BROWSERS_PATH: "/app/mcp-fetcher/node_modules/.cache/ms-playwright"
       PLAYWRIGHT_CHROMIUM_HEADLESS: "true"
-      PLAYWRIGHT_CHROMIUM_ARGS: "--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--memory-pressure-off"
+      PLAYWRIGHT_CHROMIUM_ARGS: "--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security"
       # Ограничиваем память для браузера
       PLAYWRIGHT_CHROMIUM_MAX_MEMORY: "256"
       
