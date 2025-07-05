@@ -2,6 +2,16 @@ FROM node:20.19-alpine
 
 WORKDIR /app
 
+# Устанавливаем системные зависимости для Playwright в Alpine
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
 # Копируем package.json для всех подпроектов
 COPY package*.json ./
 COPY client/package*.json ./client/
@@ -23,35 +33,37 @@ USER node
 # Устанавливаем dev-зависимости для сборки всего проекта
 RUN npm ci --include=dev
 
-# MCP-GITHUB-API: если нужен только рантайм, можно оставить --omit=dev
+# MCP-GITHUB-API
 WORKDIR /app/mcp-github-api
 RUN npm install --omit=dev
 
-# MCP-TELEGRAM: для сборки нужны dev-зависимости!
+# MCP-TELEGRAM
 WORKDIR /app/mcp-telegram
 RUN npm install
 RUN npm run build
 
-# MCP-SEQUENTIALTHINKING: сборка и установка production-зависимостей
+# MCP-SEQUENTIALTHINKING
 WORKDIR /app/sequentialthinking-mcp
-RUN npm install # dev-зависимости нужны для сборки
+RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# MCP-CONTEXT7: сборка TypeScript и установка production-зависимостей
+# MCP-CONTEXT7
 WORKDIR /app/mcp-context7
-RUN npm install # dev-зависимости нужны для TypeScript сборки
-RUN npm run build # компиляция TypeScript в JavaScript
-RUN npm prune --omit=dev # удаляем dev-зависимости после сборки
+RUN npm install
+RUN npm run build
+RUN npm prune --omit=dev
 
-# MCP-FETCHER: сборка TypeScript и установка Playwright браузеров
+# MCP-FETCHER: КРИТИЧЕСКИ ВАЖНО - устанавливаем браузеры ПОСЛЕ сборки но ДО prune
 WORKDIR /app/mcp-fetcher
-RUN npm install # dev-зависимости нужны для TypeScript сборки
-RUN npm run build # компиляция TypeScript в JavaScript
-RUN npx playwright install chromium # установка только Chromium браузера
-RUN npm prune --omit=dev # удаляем dev-зависимости после сборки
+RUN npm install
+RUN npm run build
 
-# Вернуться в корень, собрать фронтенд и подготовить окружение LibreChat
+# Устанавливаем Playwright браузеры (используем системный Chromium)
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Вернуться в корень, собрать фронтенд
 WORKDIR /app
 RUN npm run frontend
 RUN mkdir -p /app/client/public/images /app/api/logs
