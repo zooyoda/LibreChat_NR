@@ -10,6 +10,7 @@ COPY mcp-github-api/package*.json ./mcp-github-api/
 COPY mcp-telegram/package*.json ./mcp-telegram/
 COPY sequentialthinking-mcp/package*.json ./sequentialthinking-mcp/
 COPY mcp-context7/package*.json ./mcp-context7/
+COPY mcp-fetcher/package*.json ./mcp-fetcher/
 
 # Копируем исходный код
 COPY . .
@@ -41,6 +42,13 @@ RUN npm prune --omit=dev
 WORKDIR /app/mcp-context7
 RUN npm install # dev-зависимости нужны для TypeScript сборки
 RUN npm run build # компиляция TypeScript в JavaScript
+RUN npm prune --omit=dev # удаляем dev-зависимости после сборки
+
+# MCP-FETCHER: сборка TypeScript и установка Playwright браузеров
+WORKDIR /app/mcp-fetcher
+RUN npm install # dev-зависимости нужны для TypeScript сборки
+RUN npm run build # компиляция TypeScript в JavaScript
+RUN npx playwright install chromium # установка только Chromium браузера
 RUN npm prune --omit=dev # удаляем dev-зависимости после сборки
 
 # Вернуться в корень, собрать фронтенд и подготовить окружение LibreChat
