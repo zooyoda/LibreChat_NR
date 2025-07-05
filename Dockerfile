@@ -1,7 +1,5 @@
 FROM node:20.19-alpine
 
-WORKDIR /app
-
 # Устанавливаем системные зависимости для Playwright в Alpine
 RUN apk add --no-cache \
     chromium \
@@ -10,7 +8,11 @@ RUN apk add --no-cache \
     freetype-dev \
     harfbuzz \
     ca-certificates \
-    ttf-freefont
+    ttf-freefont \
+    wget \
+    xvfb-run
+
+WORKDIR /app
 
 # Копируем package.json для всех подпроектов
 COPY package*.json ./
@@ -54,16 +56,23 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# MCP-FETCHER: КРИТИЧЕСКИ ВАЖНО - устанавливаем браузеры ПОСЛЕ сборки но ДО prune
+# MCP-FETCHER: КРИТИЧЕСКИ ВАЖНО - НЕ удаляем dev-зависимости!
 WORKDIR /app/mcp-fetcher
+
+# Устанавливаем зависимости
 RUN npm install
+
+# Сначала устанавливаем браузеры, потом собираем
+RUN npx playwright install chromium
+RUN npx playwright install-deps chromium
+
+# Теперь собираем проект
 RUN npm run build
 
-# Устанавливаем Playwright браузеры (используем системный Chromium)
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# НЕ выполняем npm prune для mcp-fetcher - Playwright нужны некоторые зависимости в runtime
+# RUN npm prune --omit=dev  # ЗАКОММЕНТИРОВАНО!
 
-# Вернуться в корень, собрать фронтенд
+# Вернуться в корень
 WORKDIR /app
 RUN npm run frontend
 RUN mkdir -p /app/client/public/images /app/api/logs
@@ -75,5 +84,10 @@ EXPOSE 3080
 
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
+
+# Переменные окружения для Playwright
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/mcp-fetcher/node_modules/.cache/ms-playwright
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=false
 
 CMD ["node", "api/server/index.js"]
