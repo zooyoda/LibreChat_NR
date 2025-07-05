@@ -2282,13 +2282,15 @@ mcpServers:
     type: stdio
     command: "node"
     args: ["./mcp-fetcher/build/index.js"]
-    timeout: 120000
-    initTimeout: 60000
+    timeout: 180000
+    initTimeout: 90000
     env:
       NODE_ENV: "production"
-      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: "/usr/bin/chromium-browser"
+      PLAYWRIGHT_BROWSERS_PATH: "/app/mcp-fetcher/node_modules/.cache/ms-playwright"
       PLAYWRIGHT_CHROMIUM_HEADLESS: "true"
-      PLAYWRIGHT_CHROMIUM_ARGS: "--no-sandbox,--disable-dev-shm-usage,--disable-gpu"
+      PLAYWRIGHT_CHROMIUM_ARGS: "--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--memory-pressure-off"
+      # Ограничиваем память для браузера
+      PLAYWRIGHT_CHROMIUM_MAX_MEMORY: "256"
       
  # tg-mcp:
  #   type: stdio
