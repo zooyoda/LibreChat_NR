@@ -1,17 +1,5 @@
 FROM node:20.19-alpine
 
-# Устанавливаем системные зависимости для Playwright в Alpine
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    wget \
-    xvfb-run
-
 WORKDIR /app
 
 # Копируем package.json для всех подпроектов
@@ -29,6 +17,27 @@ COPY . .
 
 # Выставляем права
 RUN chown -R node:node /app
+
+# КРИТИЧЕСКИ ВАЖНО: Устанавливаем системные зависимости ДО переключения на node
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    wget \
+    xvfb-run \
+    # Дополнительные зависимости для Playwright
+    gcompat \
+    libc6-compat \
+    libxcomposite \
+    libxdamage \
+    libxext \
+    libxi \
+    libxtst \
+    && rm -rf /var/cache/apk/*
 
 USER node
 
@@ -56,21 +65,14 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# MCP-FETCHER: КРИТИЧЕСКИ ВАЖНО - НЕ удаляем dev-зависимости!
+# MCP-FETCHER: Используем системный Chromium вместо Playwright
 WORKDIR /app/mcp-fetcher
-
-# Устанавливаем зависимости
 RUN npm install
-
-# Сначала устанавливаем браузеры, потом собираем
-RUN npx playwright install chromium
-RUN npx playwright install-deps chromium
-
-# Теперь собираем проект
 RUN npm run build
 
-# НЕ выполняем npm prune для mcp-fetcher - Playwright нужны некоторые зависимости в runtime
-# RUN npm prune --omit=dev  # ЗАКОММЕНТИРОВАНО!
+# НЕ устанавливаем браузеры Playwright - используем системный Chromium
+# УДАЛЕНО: RUN npx playwright install chromium
+# УДАЛЕНО: RUN npx playwright install-deps chromium
 
 # Вернуться в корень
 WORKDIR /app
@@ -85,9 +87,9 @@ EXPOSE 3080
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
 
-# Переменные окружения для Playwright
-ENV PLAYWRIGHT_BROWSERS_PATH=/app/mcp-fetcher/node_modules/.cache/ms-playwright
+# Переменные окружения для использования системного Chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=false
+ENV PLAYWRIGHT_CHROMIUM_HEADLESS=true
+ENV PLAYWRIGHT_CHROMIUM_ARGS="--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security"
 
 CMD ["node", "api/server/index.js"]
