@@ -2276,7 +2276,17 @@ mcpServers:
     timeout: 60000
     initTimeout: 30000
     env:
-      NODE_ENV: "production"  
+      NODE_ENV: "production"
+
+  fetcher:
+    type: stdio
+    command: "node"
+    args: ["./mcp-fetcher/build/index.js"]
+    timeout: 60000
+    initTimeout: 30000
+    env:
+      NODE_ENV: "production"
+      PLAYWRIGHT_BROWSERS_PATH: "/app/mcp-fetcher/node_modules/.cache/ms-playwright"    
       
  # tg-mcp:
  #   type: stdio
