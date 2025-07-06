@@ -2278,19 +2278,14 @@ mcpServers:
     env:
       NODE_ENV: "production"
 
-  fetcher:
+  fetch:
     type: stdio
     command: "node"
-    args: ["./mcp-fetcher/build/index.js"]
-    timeout: 180000
-    initTimeout: 90000
+    args: ["./mcp-fetch/dist/index.js"]
+    timeout: 60000
+    initTimeout: 30000
     env:
       NODE_ENV: "production"
-      # Используем системный Chromium
-      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
-      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: "/usr/bin/chromium-browser"
-      PLAYWRIGHT_CHROMIUM_HEADLESS: "true"
-      PLAYWRIGHT_CHROMIUM_ARGS: "--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security,--disable-features=VizDisplayCompositor"
       
  # tg-mcp:
  #   type: stdio
