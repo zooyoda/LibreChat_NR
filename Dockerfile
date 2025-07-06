@@ -15,12 +15,10 @@ COPY mcp-fetcher/package*.json ./mcp-fetcher/
 # Копируем исходный код
 COPY . .
 
-# Выставляем права
-RUN chown -R node:node /app
-
 # КРИТИЧЕСКИ ВАЖНО: Устанавливаем системные зависимости ДО переключения на node
 RUN apk add --no-cache \
     chromium \
+    chromium-chromedriver \
     nss \
     freetype \
     freetype-dev \
@@ -31,12 +29,10 @@ RUN apk add --no-cache \
     xvfb-run \
     gcompat \
     libc6-compat \
-    libxcomposite \
-    libxdamage \
-    libxext \
-    libxi \
-    libxtst \
     && rm -rf /var/cache/apk/*
+
+# Выставляем права
+RUN chown -R node:node /app
 
 USER node
 
@@ -64,17 +60,13 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# MCP-FETCHER: Устанавливаем только браузеры Playwright
+# MCP-FETCHER: НОВЫЙ ПОДХОД - используем системный Chromium
 WORKDIR /app/mcp-fetcher
 RUN npm install
-
-# Устанавливаем ТОЛЬКО браузеры Playwright (без системных зависимостей)
-RUN npx playwright install chromium
-
-# УДАЛЕНО: RUN sudo npx playwright install-deps chromium
-
-# Собираем проект
 RUN npm run build
+
+# НЕ устанавливаем Playwright браузеры - используем системный Chromium
+# УДАЛЕНО: RUN npx playwright install chromium
 
 # Вернуться в корень
 WORKDIR /app
@@ -88,5 +80,9 @@ EXPOSE 3080
 
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
+
+# Настройка для системного Chromium
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 CMD ["node", "api/server/index.js"]
