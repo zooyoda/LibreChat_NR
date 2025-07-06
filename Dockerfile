@@ -10,26 +10,10 @@ COPY mcp-github-api/package*.json ./mcp-github-api/
 COPY mcp-telegram/package*.json ./mcp-telegram/
 COPY sequentialthinking-mcp/package*.json ./sequentialthinking-mcp/
 COPY mcp-context7/package*.json ./mcp-context7/
-COPY mcp-fetcher/package*.json ./mcp-fetcher/
+COPY mcp-fetch/package*.json ./mcp-fetch/
 
 # Копируем исходный код
 COPY . .
-
-# КРИТИЧЕСКИ ВАЖНО: Устанавливаем системные зависимости ДО переключения на node
-RUN apk add --no-cache \
-    chromium \
-    chromium-chromedriver \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    wget \
-    xvfb-run \
-    gcompat \
-    libc6-compat \
-    && rm -rf /var/cache/apk/*
 
 # Выставляем права
 RUN chown -R node:node /app
@@ -60,13 +44,11 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# MCP-FETCHER: НОВЫЙ ПОДХОД - используем системный Chromium
-WORKDIR /app/mcp-fetcher
+# MCP-FETCH: Новый легковесный fetcher
+WORKDIR /app/mcp-fetch
 RUN npm install
 RUN npm run build
-
-# НЕ устанавливаем Playwright браузеры - используем системный Chromium
-# УДАЛЕНО: RUN npx playwright install chromium
+RUN npm prune --omit=dev
 
 # Вернуться в корень
 WORKDIR /app
@@ -80,9 +62,5 @@ EXPOSE 3080
 
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
-
-# Настройка для системного Chromium
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 CMD ["node", "api/server/index.js"]
