@@ -20,9 +20,9 @@ import { program } from 'commander';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { createConnection } from './lib/index.js';
-import { resolveCLIConfig, validateConfig } from './lib/config.js';
-import type { CLIOptions, FullConfig } from './lib/config.js';
+import { createConnection } from './index.js';
+import { resolveCLIConfig, validateConfig } from './config.js';
+import type { CLIOptions, FullConfig } from './config.js';
 
 // Оптимизированный набор инструментов для Amvera
 const AMVERA_OPTIMIZED_CAPABILITIES = [
