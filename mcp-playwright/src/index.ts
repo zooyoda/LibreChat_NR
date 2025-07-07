@@ -1,42 +1,22 @@
 #!/usr/bin/env node
 
-/**
- * Copyright (c) Microsoft Corporation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import { program } from 'commander';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { createConnection } from './index.js';
+
+// ИСПРАВЛЕННЫЕ импорты
+import { createConnection } from './connection.js';
 import { resolveCLIConfig, validateConfig } from './config.js';
 import type { CLIOptions, FullConfig } from './config.js';
 
 // Оптимизированный набор инструментов для Amvera
 const AMVERA_OPTIMIZED_CAPABILITIES = [
-  'core',      // Основные функции браузера (navigate, click, type)
+  'core',      // Основные функции браузера
   'wait',      // Ожидание элементов
   'files',     // Базовая работа с файлами
-  'network',   // Сетевые запросы (для отладки)
+  'network',   // Сетевые запросы
   'console'    // Логи консоли браузера
-  // ИСКЛЮЧЕНЫ для экономии ресурсов:
-  // 'tabs' - управление вкладками
-  // 'pdf' - генерация PDF (ресурсоемко)
-  // 'vision' - скриншоты и визуальное взаимодействие
-  // 'testing' - инструменты тестирования
-  // 'screenshot' - создание скриншотов
 ];
 
 // Оптимизированная конфигурация для Amvera
@@ -45,7 +25,6 @@ const AMVERA_CONFIG_OVERRIDES = {
     browserName: 'chromium' as const,
     headless: true,
     launchOptions: {
-      // Оптимизация для ограниченных ресурсов
       args: [
         '--no-sandbox',
         '--disable-dev-shm-usage',
@@ -53,24 +32,18 @@ const AMVERA_CONFIG_OVERRIDES = {
         '--disable-web-security',
         '--disable-features=VizDisplayCompositor',
         '--memory-pressure-off',
-        '--max_old_space_size=512' // Ограничение памяти Node.js
+        '--max_old_space_size=512'
       ],
-      // Использование системного Chromium
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || '/usr/bin/chromium-browser'
     },
     contextOptions: {
-      // Отключаем тяжелые функции
       javaScriptEnabled: true,
       acceptDownloads: false,
-      // Минимальный viewport для экономии памяти
       viewport: { width: 1024, height: 768 }
     }
   },
-  // Ограниченный набор возможностей
   capabilities: AMVERA_OPTIMIZED_CAPABILITIES,
-  // Принудительно используем snapshot mode (легче чем vision)
   vision: false,
-  // Ограничиваем размер output директории
   outputDir: '/tmp/playwright-mcp-output'
 };
 
@@ -96,7 +69,6 @@ class AmveraOptimizedPlaywrightMCP {
   }
 
   private setupErrorHandling(): void {
-    // Graceful shutdown для Amvera
     this.server.onerror = (error) => {
       console.error('[Playwright MCP] Error:', error);
     };
@@ -126,7 +98,6 @@ class AmveraOptimizedPlaywrightMCP {
   }
 
   private setupToolHandlers(): void {
-    // Список доступных инструментов (оптимизированный)
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
         tools: [
@@ -215,17 +186,14 @@ class AmveraOptimizedPlaywrightMCP {
       };
     });
 
-    // Обработчик вызовов инструментов
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
       try {
         if (!this.connection) {
-          // Создаем подключение с оптимизированной конфигурацией
           this.connection = await createConnection(AMVERA_CONFIG_OVERRIDES);
         }
 
-        // Проксируем вызовы к реальному Playwright MCP
         const result = await this.connection.callTool(name, args);
         
         return {
