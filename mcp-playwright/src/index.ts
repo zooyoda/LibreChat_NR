@@ -191,7 +191,7 @@ class AmveraOptimizedPlaywrightMCP {
 
       try {
         if (!this.connection) {
-          this.connection = await createConnection(AMVERA_CONFIG_OVERRIDES);
+          this.connection = await createConnection(AMVERA_CONFIG_OVERRIDES, this._contextFactory);
         }
 
         const result = await this.connection.callTool(name, args);
