@@ -18,7 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import http from 'http';
 import net from 'net';
-import getType from 'mime';
+import { getType } from 'mime';
 import { ManualPromise } from './manualPromise.js';
 
 export type ServerRouteHandler = (request: http.IncomingMessage, response: http.ServerResponse) => void;
