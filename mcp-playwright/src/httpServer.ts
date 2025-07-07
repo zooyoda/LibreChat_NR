@@ -1,12 +1,12 @@
 /**
  * Copyright (c) Microsoft Corporation.
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,11 +18,8 @@ import fs from 'fs';
 import path from 'path';
 import http from 'http';
 import net from 'net';
-
-import mime from 'mime';
-
+import { getType } from 'mime';
 import { ManualPromise } from './manualPromise.js';
-
 
 export type ServerRouteHandler = (request: http.IncomingMessage, response: http.ServerResponse) => void;
 
@@ -63,10 +60,9 @@ export class HttpServer {
   }
 
   private async _tryStart(port: number | undefined, host: string) {
-    const errorPromise = new ManualPromise();
+    const errorPromise = new ManualPromise<void>();
     const errorListener = (error: Error) => errorPromise.reject(error);
     this._server.on('error', errorListener);
-
     try {
       this._server.listen(port, host);
       await Promise.race([
@@ -144,7 +140,6 @@ export class HttpServer {
 
     // Parse the range header: https://datatracker.ietf.org/doc/html/rfc7233#section-2.1
     const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
-
     // Both start and end (when passing to fs.createReadStream) and the range header are inclusive and start counting at 0.
     let start: number;
     let end: number;
@@ -178,7 +173,6 @@ export class HttpServer {
       'Content-Length': end - start + 1,
       'Content-Type': getType(path.extname(absoluteFilePath))!,
     });
-
     const readable = fs.createReadStream(absoluteFilePath, { start, end });
     readable.pipe(response);
   }
@@ -196,17 +190,20 @@ export class HttpServer {
         response.end();
         return;
       }
+
       const url = new URL('http://localhost' + request.url);
       for (const route of this._routes) {
         if (route.exact && url.pathname === route.exact) {
           route.handler(request, response);
           return;
         }
+
         if (route.prefix && url.pathname.startsWith(route.prefix)) {
           route.handler(request, response);
           return;
         }
       }
+
       response.statusCode = 404;
       response.end();
     } catch (e) {
@@ -221,7 +218,6 @@ function decorateServer(server: net.Server) {
     sockets.add(socket);
     socket.once('close', () => sockets.delete(socket));
   });
-
   const close = server.close;
   server.close = (callback?: (err?: Error) => void) => {
     for (const socket of sockets)
