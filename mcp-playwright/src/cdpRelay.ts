@@ -93,7 +93,7 @@ export class CDPRelayServer {
     }
     this._playwrightSocket = ws;
     debugLogger('Playwright MCP connected');
-    ws.on('message', async data => {
+   ws.on('message', (data: WebSocket.Data) => {
       try {
         const message = JSON.parse(data.toString());
         await this._handlePlaywrightMessage(message);
@@ -108,7 +108,7 @@ export class CDPRelayServer {
       }
       debugLogger('Playwright MCP disconnected');
     });
-    ws.on('error', error => {
+    ws.on('error', (error: Error) => {
       debugLogger('Playwright WebSocket error:', error);
     });
   }
