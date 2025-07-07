@@ -93,14 +93,14 @@ export class CDPRelayServer {
     }
     this._playwrightSocket = ws;
     debugLogger('Playwright MCP connected');
-   ws.on('message', (data: WebSocket.Data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        await this._handlePlaywrightMessage(message);
-      } catch (error) {
-        debugLogger('Error parsing Playwright message:', error);
-      }
-    });
+    ws.on('message', async (data: WebSocket.Data) => {
+  try {
+    const message = JSON.parse(data.toString());
+    await this._handlePlaywrightMessage(message);
+  } catch (error) {
+    debugLogger('Error parsing Playwright message:', error);
+  }
+});
     ws.on('close', () => {
       if (this._playwrightSocket === ws) {
         void this._detachDebugger();
