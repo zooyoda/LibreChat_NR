@@ -1,14 +1,37 @@
 #!/usr/bin/env node
 
+/**
+ * Copyright (c) Microsoft Corporation.
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { program } from 'commander';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import debug from 'debug';
 
-// ИСПРАВЛЕННЫЕ импорты
-import { createConnection } from './connection.js';
+// Импорты для mime v4+
+import { getType } from 'mime';
+
+// Локальные импорты
+import { contextFactory } from './browserContextFactory.js';
 import { resolveCLIConfig, validateConfig } from './config.js';
 import type { CLIOptions, FullConfig } from './config.js';
+import type { BrowserContextFactory } from './browserContextFactory.js';
+
+const debugLogger = debug('pw:mcp:amvera');
 
 // Оптимизированный набор инструментов для Amvera
 const AMVERA_OPTIMIZED_CAPABILITIES = [
@@ -20,10 +43,11 @@ const AMVERA_OPTIMIZED_CAPABILITIES = [
 ];
 
 // Оптимизированная конфигурация для Amvera
-const AMVERA_CONFIG_OVERRIDES = {
+const AMVERA_CONFIG_OVERRIDES: Partial<FullConfig> = {
   browser: {
     browserName: 'chromium' as const,
     headless: true,
+    isolated: false,
     launchOptions: {
       args: [
         '--no-sandbox',
@@ -34,7 +58,9 @@ const AMVERA_CONFIG_OVERRIDES = {
         '--memory-pressure-off',
         '--max_old_space_size=512'
       ],
-      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || '/usr/bin/chromium-browser'
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+      headless: true,
+      chromiumSandbox: false
     },
     contextOptions: {
       javaScriptEnabled: true,
@@ -49,7 +75,8 @@ const AMVERA_CONFIG_OVERRIDES = {
 
 class AmveraOptimizedPlaywrightMCP {
   private server: Server;
-  private connection: any;
+  private browserContextFactory: BrowserContextFactory | null = null;
+  private currentContext: { browserContext: any, close: () => Promise<void> } | null = null;
 
   constructor() {
     this.server = new Server(
@@ -88,13 +115,28 @@ class AmveraOptimizedPlaywrightMCP {
 
   private async cleanup(): Promise<void> {
     try {
-      if (this.connection) {
-        await this.connection.close();
+      if (this.currentContext) {
+        await this.currentContext.close();
+        this.currentContext = null;
       }
       await this.server.close();
     } catch (error) {
       console.error('[Playwright MCP] Error during cleanup:', error);
     }
+  }
+
+  private async getBrowserContext() {
+    if (!this.browserContextFactory) {
+      // Создаем конфигурацию браузера
+      const browserConfig = AMVERA_CONFIG_OVERRIDES.browser!;
+      this.browserContextFactory = contextFactory(browserConfig as any);
+    }
+
+    if (!this.currentContext) {
+      this.currentContext = await this.browserContextFactory.createContext();
+    }
+
+    return this.currentContext.browserContext;
   }
 
   private setupToolHandlers(): void {
@@ -120,7 +162,13 @@ class AmveraOptimizedPlaywrightMCP {
             description: 'Get accessibility snapshot of the current page',
             inputSchema: {
               type: 'object',
-              properties: {}
+              properties: {
+                interactiveOnly: {
+                  type: 'boolean',
+                  description: 'Only include interactive elements',
+                  default: true
+                }
+              }
             }
           },
           {
@@ -190,11 +238,8 @@ class AmveraOptimizedPlaywrightMCP {
       const { name, arguments: args } = request.params;
 
       try {
-        if (!this.connection) {
-          this.connection = await createConnection(AMVERA_CONFIG_OVERRIDES, this._contextFactory);
-        }
-
-        const result = await this.connection.callTool(name, args);
+        debugLogger(`Executing tool: ${name}`, args);
+        const result = await this.executeTool(name, args);
         
         return {
           content: [
@@ -219,9 +264,49 @@ class AmveraOptimizedPlaywrightMCP {
     });
   }
 
+  private async executeTool(toolName: string, args: any): Promise<string> {
+    const browserContext = await this.getBrowserContext();
+    const page = browserContext.pages()[0] || await browserContext.newPage();
+
+    switch (toolName) {
+      case 'browser_navigate':
+        await page.goto(args.url, { waitUntil: 'domcontentloaded' });
+        return `Successfully navigated to ${args.url}`;
+
+      case 'browser_snapshot':
+        const snapshot = await page.locator('body').innerHTML();
+        return `Page snapshot:\n${snapshot.substring(0, 2000)}${snapshot.length > 2000 ? '...' : ''}`;
+
+      case 'browser_click':
+        await page.locator(args.selector).click();
+        return `Successfully clicked element: ${args.selector}`;
+
+      case 'browser_type':
+        await page.locator(args.selector).fill(args.text);
+        return `Successfully typed "${args.text}" into element: ${args.selector}`;
+
+      case 'browser_wait_for':
+        await page.locator(args.selector).waitFor({ 
+          timeout: args.timeout || 5000 
+        });
+        return `Element appeared: ${args.selector}`;
+
+      case 'browser_close':
+        if (this.currentContext) {
+          await this.currentContext.close();
+          this.currentContext = null;
+        }
+        return 'Browser closed successfully';
+
+      default:
+        throw new Error(`Unknown tool: ${toolName}`);
+    }
+  }
+
   async run(): Promise<void> {
     console.log('[Playwright MCP] Starting Amvera-optimized Playwright MCP server...');
     console.log('[Playwright MCP] Enabled capabilities:', AMVERA_OPTIMIZED_CAPABILITIES.join(', '));
+    console.log('[Playwright MCP] Using system Chromium:', process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || '/usr/bin/chromium-browser');
     
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
