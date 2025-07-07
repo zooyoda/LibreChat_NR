@@ -2287,22 +2287,22 @@ mcpServers:
     env:
       NODE_ENV: "production"
 
-   playwright:
-    type: stdio
-    command: "node"
-    args: ["./mcp-playwright/dist/index.js"]
-    timeout: 120000
-    initTimeout: 60000
-    env:
-      NODE_ENV: "production"
+  # playwright:
+  #  type: stdio
+  #  command: "node"
+  #  args: ["./mcp-playwright/dist/index.js"]
+  #  timeout: 120000
+  #  initTimeout: 60000
+  #  env:
+  #    NODE_ENV: "production"
       # Используем системный Chromium
-      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: "/usr/bin/chromium-browser"
-      PLAYWRIGHT_CHROMIUM_HEADLESS: "true"
-      PLAYWRIGHT_CHROMIUM_ARGS: "--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security"
+  #    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: "/usr/bin/chromium-browser"
+  #    PLAYWRIGHT_CHROMIUM_HEADLESS: "true"
+  #    PLAYWRIGHT_CHROMIUM_ARGS: "--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security"
       # Отключаем загрузку браузеров Playwright
-      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+  #    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       # Режим работы (по умолчанию snapshot, можно vision)
-      PLAYWRIGHT_MODE: "snapshot"    
+  #    PLAYWRIGHT_MODE: "snapshot"    
       
  # tg-mcp:
  #   type: stdio
