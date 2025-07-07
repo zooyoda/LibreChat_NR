@@ -1,20 +1,5 @@
 FROM node:20.19-alpine
 
-# Устанавливаем системные зависимости для Playwright
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    wget \
-    xvfb-run \
-    gcompat \
-    libc6-compat \
-    && rm -rf /var/cache/apk/*
-
 WORKDIR /app
 
 # Копируем package.json для всех подпроектов
@@ -26,7 +11,6 @@ COPY mcp-telegram/package*.json ./mcp-telegram/
 COPY sequentialthinking-mcp/package*.json ./sequentialthinking-mcp/
 COPY mcp-context7/package*.json ./mcp-context7/
 COPY mcp-fetch/package*.json ./mcp-fetch/
-COPY mcp-playwright/package*.json ./mcp-playwright/
 
 # Копируем исходный код
 COPY . .
@@ -60,19 +44,11 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# MCP-FETCH
+# MCP-FETCH: Новый легковесный fetcher
 WORKDIR /app/mcp-fetch
 RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
-
-# MCP-PLAYWRIGHT: Исправленная сборка
-WORKDIR /app/mcp-playwright
-# Устанавливаем все зависимости включая dev для сборки
-RUN npm install
-# Собираем TypeScript проект
-RUN npm run build
-# НЕ удаляем dev-зависимости для playwright (нужны в runtime)
 
 # Вернуться в корень
 WORKDIR /app
@@ -86,9 +62,5 @@ EXPOSE 3080
 
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
-
-# Переменные окружения для Playwright
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 CMD ["node", "api/server/index.js"]
