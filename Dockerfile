@@ -13,11 +13,6 @@ RUN apk add --no-cache \
     xvfb-run \
     gcompat \
     libc6-compat \
-    libxcomposite \
-    libxdamage \
-    libxext \
-    libxi \
-    libxtst \
     && rm -rf /var/cache/apk/*
 
 WORKDIR /app
@@ -71,13 +66,13 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# MCP-PLAYWRIGHT: Сборка TypeScript и установка браузеров
+# MCP-PLAYWRIGHT: Исправленная сборка
 WORKDIR /app/mcp-playwright
+# Устанавливаем все зависимости включая dev для сборки
 RUN npm install
+# Собираем TypeScript проект
 RUN npm run build
-
-# Установка браузеров Playwright (используем системный Chromium для оптимизации)
-# Playwright будет использовать системный Chromium вместо собственных браузеров
+# НЕ удаляем dev-зависимости для playwright (нужны в runtime)
 
 # Вернуться в корень
 WORKDIR /app
