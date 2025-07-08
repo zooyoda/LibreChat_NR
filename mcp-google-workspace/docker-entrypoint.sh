@@ -1,11 +1,11 @@
-#!/bin/bash
+#!/bin/sh
 
 # Function to log error messages
 log_error() {
     echo "[ERROR] $1" >&2
 }
 
-# Function to log info messages
+# Function to log info messages  
 log_info() {
     echo "[INFO] $1" >&2
 }
@@ -34,7 +34,7 @@ export MCP_MODE=true
 export LOG_FILE="/app/logs/google-workspace-mcp.log"
 export WORKSPACE_BASE_PATH="$WORKSPACE_BASE_PATH"
 
-# Ensure /app/config/accounts.json exists, copy from example if missing, or create minimal if both missing
+# Ensure /app/config/accounts.json exists
 if [ ! -f "/app/config/accounts.json" ]; then
     if [ -f "/app/config/accounts.example.json" ]; then
         log_info "accounts.json not found, copying from accounts.example.json"
