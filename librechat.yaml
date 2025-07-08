@@ -2294,10 +2294,17 @@ mcpServers:
     timeout: 120000
     initTimeout: 60000
     env:
-      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
-      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      GOOGLE_CLIENT_ID: "{{GOOGLE_CLIENT_ID}}"
+      GOOGLE_CLIENT_SECRET: "{{GOOGLE_CLIENT_SECRET}}"
       WORKSPACE_BASE_PATH: "/app/workspace"
-      LOG_MODE: "strict"  
+      LOG_MODE: "strict"
+    customUserVars:
+      GOOGLE_CLIENT_ID:
+        title: "Google OAuth Client ID"
+        description: "OAuth 2.0 Client ID from Google Cloud Console. Create credentials at <a href='https://console.cloud.google.com/apis/credentials' target='_blank'>Google Cloud Console</a>."
+      GOOGLE_CLIENT_SECRET:
+        title: "Google OAuth Client Secret"
+        description: "OAuth 2.0 Client Secret from Google Cloud Console"
 
   # playwright:
   #  type: stdio
