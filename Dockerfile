@@ -16,8 +16,7 @@ COPY mcp-google-workspace/package*.json ./mcp-google-workspace/
 # Копируем исходный код
 COPY . .
 
-# ИСПРАВЛЕНИЕ 1: Устанавливаем права на docker-entrypoint.sh ДО переключения на USER node
-COPY mcp-google-workspace/docker-entrypoint.sh /app/mcp-google-workspace/docker-entrypoint.sh
+# Устанавливаем права на docker-entrypoint.sh ДО переключения на USER node
 RUN chmod +x /app/mcp-google-workspace/docker-entrypoint.sh
 
 # Выставляем права и переключаемся на пользователя node
@@ -48,20 +47,29 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# MCP-FETCH: Новый легковесный fetcher
+# MCP-FETCH
 WORKDIR /app/mcp-fetch
 RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# MCP-GOOGLE-WORKSPACE: Google Workspace integration
+# MCP-GOOGLE-WORKSPACE: ИСПРАВЛЕННАЯ ВЕРСИЯ
 WORKDIR /app/mcp-google-workspace
-RUN npm install
-RUN npm run build
-RUN npm prune --omit=dev
 
-# ИСПРАВЛЕНИЕ 2: Убираем повторное копирование и chmod
-# Файл уже скопирован и права установлены выше
+# Устанавливаем зависимости включая dev (нужен typescript для сборки)
+RUN npm install
+
+# Проверяем наличие исходных файлов
+RUN ls -la src/
+
+# Компилируем TypeScript
+RUN npm run build
+
+# Проверяем результат сборки
+RUN ls -la build/
+
+# Очищаем dev-зависимости
+RUN npm prune --omit=dev
 
 # Создаем необходимые директории
 RUN mkdir -p /app/config /app/logs /app/workspace
