@@ -2289,8 +2289,8 @@ mcpServers:
 
   google-workspace:
     type: stdio
-    command: "node"
-    args: ["./mcp-google-workspace/build/index.js"]
+    command: "sh"
+    args: ["./mcp-google-workspace/docker-entrypoint.sh"]
     timeout: 120000
     initTimeout: 60000
     env:
