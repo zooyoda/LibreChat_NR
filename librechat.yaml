@@ -2287,17 +2287,17 @@ mcpServers:
     env:
       NODE_ENV: "production"
 
-  google-workspace:
-    type: stdio
-    command: "sh"
-    args: ["./mcp-google-workspace/docker-entrypoint.sh"]
-    timeout: 120000
-    initTimeout: 60000
-    env:
-      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
-      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
-      WORKSPACE_BASE_PATH: "/app/workspace"
-      LOG_MODE: "strict"   
+ google-workspace:
+  type: stdio
+  command: "sh"
+  args: ["/app/mcp-google-workspace/docker-entrypoint.sh"]
+  timeout: 120000
+  initTimeout: 60000
+  env:
+    GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+    GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+    WORKSPACE_BASE_PATH: "/app/workspace"
+    LOG_MODE: "strict"  
 
   # playwright:
   #  type: stdio
