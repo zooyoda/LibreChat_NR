@@ -16,9 +16,12 @@ COPY mcp-google-workspace/package*.json ./mcp-google-workspace/
 # Копируем исходный код
 COPY . .
 
-# Выставляем права
-RUN chown -R node:node /app
+# ИСПРАВЛЕНИЕ 1: Устанавливаем права на docker-entrypoint.sh ДО переключения на USER node
+COPY mcp-google-workspace/docker-entrypoint.sh /app/mcp-google-workspace/docker-entrypoint.sh
+RUN chmod +x /app/mcp-google-workspace/docker-entrypoint.sh
 
+# Выставляем права и переключаемся на пользователя node
+RUN chown -R node:node /app
 USER node
 
 # Устанавливаем dev-зависимости для сборки всего проекта
@@ -57,9 +60,8 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# Копируем docker-entrypoint.sh и устанавливаем права
-COPY mcp-google-workspace/docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh
+# ИСПРАВЛЕНИЕ 2: Убираем повторное копирование и chmod
+# Файл уже скопирован и права установлены выше
 
 # Создаем необходимые директории
 RUN mkdir -p /app/config /app/logs /app/workspace
