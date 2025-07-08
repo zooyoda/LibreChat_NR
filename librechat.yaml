@@ -2287,6 +2287,18 @@ mcpServers:
     env:
       NODE_ENV: "production"
 
+  google-workspace:
+    type: stdio
+    command: "node"
+    args: ["./mcp-google-workspace/build/index.js"]
+    timeout: 120000
+    initTimeout: 60000
+    env:
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      WORKSPACE_BASE_PATH: "/app/workspace"
+      LOG_MODE: "strict"   
+
   # playwright:
   #  type: stdio
   #  command: "node"
