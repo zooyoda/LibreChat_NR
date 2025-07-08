@@ -1,26 +1,5 @@
 [
   {
-    "name": "Google Workspace MCP",
-    "pluginKey": "google_workspace_mcp",
-    "toolkit": true,
-    "description": "Comprehensive Google Workspace integration with Gmail, Calendar, and Drive APIs. Supports email management, calendar events, file operations, and more through authenticated Google account access.",
-    "icon": "https://developers.google.com/static/workspace/images/workspace-logo.svg",
-    "authConfig": [
-      {
-        "authField": "GOOGLE_CLIENT_ID",
-        "label": "Google OAuth Client ID",
-        "description": "OAuth 2.0 Client ID from Google Cloud Console. Create credentials at: https://console.cloud.google.com/apis/credentials"
-      },
-      {
-        "authField": "GOOGLE_CLIENT_SECRET", 
-        "label": "Google OAuth Client Secret",
-        "description": "OAuth 2.0 Client Secret from Google Cloud Console"
-      }
-    ],
-    "authenticated": false,
-    "isAuthRequired": true
-  },
-  {
     "name": "WordPress JWT API",
     "pluginKey": "wordpress_jwt_api",
     "toolkit": true,
