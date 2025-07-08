@@ -11,6 +11,7 @@ COPY mcp-telegram/package*.json ./mcp-telegram/
 COPY sequentialthinking-mcp/package*.json ./sequentialthinking-mcp/
 COPY mcp-context7/package*.json ./mcp-context7/
 COPY mcp-fetch/package*.json ./mcp-fetch/
+COPY mcp-google-workspace/package*.json ./mcp-google-workspace/
 
 # Копируем исходный код
 COPY . .
@@ -49,6 +50,19 @@ WORKDIR /app/mcp-fetch
 RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
+
+# MCP-GOOGLE-WORKSPACE: Google Workspace integration
+WORKDIR /app/mcp-google-workspace
+RUN npm install
+RUN npm run build
+RUN npm prune --omit=dev
+
+# Копируем docker-entrypoint.sh и устанавливаем права
+COPY mcp-google-workspace/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
+
+# Создаем необходимые директории
+RUN mkdir -p /app/config /app/logs /app/workspace
 
 # Вернуться в корень
 WORKDIR /app
