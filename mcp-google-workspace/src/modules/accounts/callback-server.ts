@@ -1,244 +1,307 @@
-import http from 'http';
-import url from 'url';
+import express from 'express';
+import { createServer, Server } from 'http';
 import logger from '../../utils/logger.js';
 
 export class OAuthCallbackServer {
-  private static instance?: OAuthCallbackServer;
-  private server?: http.Server;
-  private port: number = 8080;
-  private isRunning: boolean = false;
-  private pendingPromises: Map<string, { resolve: (code: string) => void; reject: (error: Error) => void }> = new Map();
-  private authHandler?: (code: string, state: string) => Promise<void>;
-  
-  private constructor() {}
-  
+  private static instance: OAuthCallbackServer;
+  private server: Server | null = null;
+  private app: express.Application;
+  private pendingPromises = new Map<string, { resolve: (code: string) => void; reject: (error: Error) => void }>();
+
+  private constructor() {
+    this.app = express();
+    this.setupRoutes();
+  }
+
   static getInstance(): OAuthCallbackServer {
     if (!OAuthCallbackServer.instance) {
       OAuthCallbackServer.instance = new OAuthCallbackServer();
     }
     return OAuthCallbackServer.instance;
   }
-  
-  async ensureServerRunning(): Promise<void> {
-    if (this.isRunning) {
-      return;
-    }
-    
-    return new Promise((resolve, reject) => {
-      this.server = http.createServer((req, res) => {
-        const parsedUrl = url.parse(req.url || '', true);
-        
-        // Handle the auto-complete endpoint
-        if (parsedUrl.pathname === '/complete-auth' && req.method === 'POST') {
-          let body = '';
-          req.on('data', chunk => {
-            body += chunk.toString();
-          });
-          req.on('end', async () => {
-            try {
-              const { code, state } = JSON.parse(body);
-              
-              // Automatically complete the authentication
-              if (this.authHandler) {
-                await this.authHandler(code, state || 'default');
-                logger.info('OAuth authentication completed automatically');
-              }
-              
-              // Also resolve any pending promises (for backward compatibility)
-              const pending = this.pendingPromises.get(state || 'default');
-              if (pending) {
-                pending.resolve(code);
-                this.pendingPromises.delete(state || 'default');
-              }
-              
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ success: true }));
-            } catch (error) {
-              logger.error('Failed to process auto-complete request:', error);
-              res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ success: false, error: 'Invalid request' }));
-            }
-          });
-          return;
-        }
-        
-        if (parsedUrl.pathname === '/') {
-          const code = parsedUrl.query.code as string;
-          const error = parsedUrl.query.error as string;
-          const state = parsedUrl.query.state as string || 'default';
-          
-          if (error) {
-            res.writeHead(400, { 'Content-Type': 'text/html' });
-            res.end(`
-              <html>
-                <body>
-                  <h1>Authorization Failed</h1>
-                  <p>Error: ${error}</p>
-                  <p>You can close this window.</p>
-                </body>
-              </html>
-            `);
-            
-            // Reject any pending promises
-            const pending = this.pendingPromises.get(state);
-            if (pending) {
-              pending.reject(new Error(`OAuth error: ${error}`));
-              this.pendingPromises.delete(state);
-            }
-            return;
-          }
-          
-          if (code) {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`
-              <html>
-                <head>
-                  <title>Google OAuth Authorization Successful</title>
-                  <style>
-                    body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-                    .success-message { 
-                      background: #4CAF50; 
-                      color: white; 
-                      padding: 20px; 
-                      border-radius: 5px; 
-                      margin-bottom: 20px;
-                      text-align: center;
-                    }
-                    .status { 
-                      background: #e7f3ff; 
-                      padding: 15px; 
-                      border-left: 4px solid #2196F3;
-                      margin: 20px 0;
-                    }
-                    .loading {
-                      display: inline-block;
-                      width: 20px;
-                      height: 20px;
-                      border: 3px solid #f3f3f3;
-                      border-top: 3px solid #3498db;
-                      border-radius: 50%;
-                      animation: spin 1s linear infinite;
-                      margin-left: 10px;
-                      vertical-align: middle;
-                    }
-                    @keyframes spin {
-                      0% { transform: rotate(0deg); }
-                      100% { transform: rotate(360deg); }
-                    }
-                    .code-fallback {
-                      font-family: monospace;
-                      background: #f5f5f5;
-                      padding: 10px;
-                      margin: 10px 0;
-                      word-break: break-all;
-                      display: none;
-                    }
-                  </style>
-                </head>
-                <body>
-                  <div class="success-message">
-                    <h1>✅ Authorization Successful!</h1>
-                  </div>
-                  
-                  <div class="status" id="status">
-                    <h3>Completing authentication automatically...</h3>
-                    <p>Please wait while we complete the authentication process <span class="loading"></span></p>
-                  </div>
-                  
-                  <div class="code-fallback" id="codeFallback">
-                    <p>If automatic authentication fails, you can manually copy this code:</p>
-                    <code>${code}</code>
-                  </div>
-                  
-                  <script>
-                    // Automatically submit the authorization code to complete the flow
-                    async function completeAuth() {
-                      try {
-                        // Send the code to a special endpoint that will trigger the promise resolution
-                        const response = await fetch('/complete-auth', {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                          },
-                          body: JSON.stringify({ 
-                            code: '${code}',
-                            state: '${state}'
-                          })
-                        });
-                        
-                        if (response.ok) {
-                          document.getElementById('status').innerHTML = 
-                            '<h3>✅ Authentication Complete!</h3>' +
-                            '<p>You can now close this window and return to Claude Desktop.</p>';
-                        } else {
-                          throw new Error('Failed to complete authentication');
-                        }
-                      } catch (error) {
-                        console.error('Auto-complete failed:', error);
-                        document.getElementById('status').innerHTML = 
-                          '<h3>⚠️ Automatic completion failed</h3>' +
-                          '<p>Please copy the code below and paste it back to Claude Desktop:</p>';
-                        document.getElementById('codeFallback').style.display = 'block';
-                      }
-                    }
-                    
-                    // Start the auto-completion process
-                    setTimeout(completeAuth, 500);
-                  </script>
-                </body>
-              </html>
-            `);
-            
-            // Immediately trigger the authentication completion
-            // by posting to our own complete-auth endpoint
-            // Don't resolve here anymore - let the auto-complete endpoint handle it
-            return;
-          }
-        }
-        
-        res.writeHead(404, { 'Content-Type': 'text/html' });
-        res.end('<html><body><h1>Not Found</h1></body></html>');
-      });
-      
-      this.server.listen(this.port, () => {
-        this.isRunning = true;
-        logger.info(`OAuth callback server listening on http://localhost:${this.port}`);
-        resolve();
-      });
-      
-      this.server.on('error', (err) => {
-        this.isRunning = false;
-        reject(err);
-      });
-    });
-  }
-  
-  async waitForAuthorizationCode(sessionId: string = 'default'): Promise<string> {
-    await this.ensureServerRunning();
-    
-    return new Promise((resolve, reject) => {
-      // Store the promise resolvers for this session
-      this.pendingPromises.set(sessionId, { resolve, reject });
-      
-      // Set a timeout to avoid hanging forever
-      setTimeout(() => {
-        if (this.pendingPromises.has(sessionId)) {
-          this.pendingPromises.delete(sessionId);
-          reject(new Error('OAuth timeout - no authorization received within 5 minutes'));
-        }
-      }, 5 * 60 * 1000); // 5 minutes timeout
-    });
-  }
-  
+
+  // ИСПРАВЛЕНИЕ: Динамическое определение callback URL
   getCallbackUrl(): string {
-    return `http://localhost:${this.port}`;
-  }
-  
-  isServerRunning(): boolean {
-    return this.isRunning;
+    // Приоритет переменных окружения для внешних доменов
+    const externalCallbackUrl = process.env.OAUTH_CALLBACK_URL || 
+                               process.env.GOOGLE_OAUTH_CALLBACK_URI ||
+                               process.env.OAUTH_REDIRECT_URI;
+    
+    if (externalCallbackUrl) {
+      logger.info(`Using external callback URL: ${externalCallbackUrl}`);
+      return externalCallbackUrl;
+    }
+
+    // Fallback на localhost для локальной разработки
+    const port = this.getPort();
+    const localCallbackUrl = `http://localhost:${port}/oauth2callback`;
+    
+    logger.info(`Using local callback URL: ${localCallbackUrl}`);
+    return localCallbackUrl;
   }
 
-  setAuthHandler(handler: (code: string, state: string) => Promise<void>) {
-    this.authHandler = handler;
+  // НОВЫЙ МЕТОД: Определение порта из переменных окружения
+  private getPort(): number {
+    const port = process.env.OAUTH_SERVER_PORT || 
+                process.env.WORKSPACE_MCP_PORT || 
+                process.env.OAUTH_CALLBACK_PORT || 
+                '8080';
+    return parseInt(port, 10);
+  }
+
+  // НОВЫЙ МЕТОД: Определение хоста
+  private getHost(): string {
+    return process.env.OAUTH_SERVER_HOST || '0.0.0.0';
+  }
+
+  // НОВЫЙ МЕТОД: Проверка, используется ли внешний callback
+  private isUsingExternalCallback(): boolean {
+    const externalCallbackUrl = process.env.OAUTH_CALLBACK_URL || 
+                               process.env.GOOGLE_OAUTH_CALLBACK_URI ||
+                               process.env.OAUTH_REDIRECT_URI;
+    return !!externalCallbackUrl;
+  }
+
+  async ensureServerRunning(): Promise<void> {
+    if (this.server) {
+      logger.info('OAuth callback server already running');
+      return;
+    }
+
+    // ИСПРАВЛЕНИЕ: Проверяем, нужен ли локальный сервер
+    if (this.isUsingExternalCallback()) {
+      logger.info('Using external callback URL, skipping local server startup');
+      return;
+    }
+
+    const port = this.getPort();
+    const host = this.getHost();
+
+    logger.info(`Starting OAuth callback server on ${host}:${port}`);
+
+    return new Promise((resolve, reject) => {
+      this.server = createServer(this.app);
+      
+      this.server.listen(port, host, () => {
+        logger.info(`OAuth callback server listening on http://${host}:${port}`);
+        resolve();
+      });
+
+      this.server.on('error', (error: any) => {
+        if (error.code === 'EADDRINUSE') {
+          logger.warn(`Port ${port} is already in use, trying alternative approach`);
+          
+          // Если порт занят, проверяем альтернативные порты
+          const alternativePort = port + 1;
+          logger.info(`Trying alternative port: ${alternativePort}`);
+          
+          this.server?.close();
+          this.server = createServer(this.app);
+          
+          this.server.listen(alternativePort, host, () => {
+            logger.info(`OAuth callback server listening on http://${host}:${alternativePort}`);
+            
+            // Обновляем переменные окружения для альтернативного порта
+            process.env.OAUTH_SERVER_PORT = alternativePort.toString();
+            
+            resolve();
+          });
+        } else {
+          logger.error('Failed to start OAuth callback server:', error);
+          reject(error);
+        }
+      });
+    });
+  }
+
+  private setupRoutes(): void {
+    // Middleware для логирования
+    this.app.use((req, res, next) => {
+      logger.debug(`OAuth callback request: ${req.method} ${req.url}`);
+      next();
+    });
+
+    // Health check endpoint
+    this.app.get('/health', (req, res) => {
+      res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+
+    // OAuth callback endpoint
+    this.app.get('/oauth2callback', (req, res) => {
+      const { code, error, state } = req.query;
+
+      logger.info(`OAuth callback received: code=${!!code}, error=${error}, state=${state}`);
+
+      if (error) {
+        logger.error(`OAuth error: ${error}`);
+        
+        res.writeHead(400, { 'Content-Type': 'text/html' });
+        res.end(`
+          <html>
+            <head><title>OAuth Error</title></head>
+            <body>
+              <h1>OAuth Error</h1>
+              <p>Error: ${error}</p>
+              <p>Please close this window and try again.</p>
+              <script>
+                setTimeout(() => window.close(), 3000);
+              </script>
+            </body>
+          </html>
+        `);
+        
+        const pending = this.pendingPromises.get(state as string);
+        if (pending) {
+          pending.reject(new Error(`OAuth error: ${error}`));
+          this.pendingPromises.delete(state as string);
+        }
+        return;
+      }
+
+      if (code) {
+        logger.info('OAuth authorization code received successfully');
+        
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(`
+          <html>
+            <head><title>Authentication Successful</title></head>
+            <body>
+              <h1>Authentication Successful!</h1>
+              <p>Please wait while we complete the authentication process...</p>
+              <p>If automatic authentication fails, you can manually copy this code:</p>
+              <code style="background: #f0f0f0; padding: 10px; display: block; margin: 10px 0;">${code}</code>
+              <script>
+                setTimeout(() => {
+                  try {
+                    window.close();
+                  } catch (e) {
+                    document.body.innerHTML += '<p>You can now close this window.</p>';
+                  }
+                }, 2000);
+              </script>
+            </body>
+          </html>
+        `);
+
+        // Resolve any pending promises
+        if (this.pendingPromises.size > 0) {
+          const [firstKey, firstPromise] = this.pendingPromises.entries().next().value;
+          firstPromise.resolve(code as string);
+          this.pendingPromises.delete(firstKey);
+        }
+        
+        // Also try to resolve by state
+        const pending = this.pendingPromises.get(state as string);
+        if (pending) {
+          pending.resolve(code as string);
+          this.pendingPromises.delete(state as string);
+        }
+      } else {
+        logger.warn('OAuth callback received without code or error');
+        res.writeHead(400, { 'Content-Type': 'text/html' });
+        res.end(`
+          <html>
+            <head><title>OAuth Error</title></head>
+            <body>
+              <h1>OAuth Error</h1>
+              <p>No authorization code received.</p>
+              <p>Please close this window and try again.</p>
+            </body>
+          </html>
+        `);
+      }
+    });
+
+    // Alternative callback endpoints for compatibility
+    this.app.get('/auth/google/callback', (req, res) => {
+      req.url = '/oauth2callback';
+      this.app.handle(req, res);
+    });
+
+    this.app.get('/api/auth/google/callback', (req, res) => {
+      req.url = '/oauth2callback';
+      this.app.handle(req, res);
+    });
+
+    // Error handling middleware
+    this.app.use((err: any, req: any, res: any, next: any) => {
+      logger.error('OAuth callback server error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+  }
+
+  async waitForAuthorizationCode(): Promise<string> {
+    logger.info('Waiting for OAuth authorization code...');
+    
+    return new Promise((resolve, reject) => {
+      const state = Math.random().toString(36).substring(7);
+      this.pendingPromises.set(state, { resolve, reject });
+
+      // Timeout after 5 minutes
+      const timeout = setTimeout(() => {
+        if (this.pendingPromises.has(state)) {
+          this.pendingPromises.delete(state);
+          reject(new Error('OAuth authentication timeout (5 minutes)'));
+        }
+      }, 300000);
+
+      // Clear timeout when promise resolves
+      const originalResolve = resolve;
+      const originalReject = reject;
+      
+      const wrappedResolve = (code: string) => {
+        clearTimeout(timeout);
+        originalResolve(code);
+      };
+      
+      const wrappedReject = (error: Error) => {
+        clearTimeout(timeout);
+        originalReject(error);
+      };
+
+      this.pendingPromises.set(state, { 
+        resolve: wrappedResolve, 
+        reject: wrappedReject 
+      });
+    });
+  }
+
+  // НОВЫЙ МЕТОД: Получение статуса сервера
+  getServerStatus(): { running: boolean; port?: number; host?: string; external: boolean } {
+    const external = this.isUsingExternalCallback();
+    
+    if (external) {
+      return { running: true, external: true };
+    }
+    
+    return {
+      running: !!this.server,
+      port: this.getPort(),
+      host: this.getHost(),
+      external: false
+    };
+  }
+
+  // НОВЫЙ МЕТОД: Остановка сервера
+  async stopServer(): Promise<void> {
+    if (this.server) {
+      logger.info('Stopping OAuth callback server...');
+      
+      return new Promise((resolve) => {
+        this.server!.close(() => {
+          logger.info('OAuth callback server stopped');
+          this.server = null;
+          resolve();
+        });
+      });
+    }
+  }
+
+  // НОВЫЙ МЕТОД: Очистка ожидающих промисов
+  clearPendingPromises(): void {
+    for (const [state, promise] of this.pendingPromises.entries()) {
+      promise.reject(new Error('OAuth callback server shutting down'));
+    }
+    this.pendingPromises.clear();
   }
 }
