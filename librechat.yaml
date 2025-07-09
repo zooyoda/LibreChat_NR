@@ -2302,6 +2302,9 @@ mcpServers:
       WORKSPACE_MCP_BASE_URI: "https://your-actual-project-name.amvera.io"
       WORKSPACE_MCP_PORT: "8081"
       OAUTH_SERVER_PORT: "8081"
+      # Принудительно задаем правильный домен
+      AMVERA_DOMAIN: "https://nrlibre-neuralrunner.amvera.io"
+      OAUTH_CALLBACK_DOMAIN: "https://nrlibre-neuralrunner.amvera.io"
     customUserVars:
       GOOGLE_CLIENT_ID:
         title: "Google OAuth Client ID"
