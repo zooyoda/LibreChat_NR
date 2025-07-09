@@ -17,36 +17,52 @@ log_debug() {
 
 # Function to detect Amvera domain
 detect_amvera_domain() {
-    # Проверяем переменные окружения Amvera
+    # ПРИОРИТЕТ 1: Принудительно заданный домен
     if [ -n "$AMVERA_DOMAIN" ]; then
         echo "$AMVERA_DOMAIN"
         return
     fi
     
-    # Пытаемся определить по заголовкам или другим переменным
+    # ПРИОРИТЕТ 2: OAuth callback domain
+    if [ -n "$OAUTH_CALLBACK_DOMAIN" ]; then
+        echo "$OAUTH_CALLBACK_DOMAIN"
+        return
+    fi
+    
+    # ПРИОРИТЕТ 3: Workspace base URI
+    if [ -n "$WORKSPACE_MCP_BASE_URI" ]; then
+        echo "$WORKSPACE_MCP_BASE_URI"
+        return
+    fi
+    
+    # ПРИОРИТЕТ 4: Пытаемся определить по переменным окружения
     if [ -n "$VERCEL_URL" ]; then
         echo "https://$VERCEL_URL"
         return
     fi
     
-    # Для Amvera пытаемся определить по переменным окружения
+    # ПРИОРИТЕТ 5: Для Amvera пытаемся определить по hostname
     if [ -n "$HOSTNAME" ] && echo "$HOSTNAME" | grep -q "amvera"; then
-        # Извлекаем домен из hostname
-        DOMAIN=$(echo "$HOSTNAME" | sed 's/.*\.\(.*\.amvera\.io\)$/\1/')
-        if [ -n "$DOMAIN" ]; then
-            echo "https://$DOMAIN"
-            return
+        # Извлекаем базовый домен из hostname
+        BASE_DOMAIN=$(echo "$HOSTNAME" | sed 's/.*\(amvera\.io\)$/\1/')
+        if [ "$BASE_DOMAIN" = "amvera.io" ]; then
+            # Пытаемся извлечь проект из hostname
+            PROJECT_NAME=$(echo "$HOSTNAME" | sed 's/-[^-]*-[^-]*-[^-]*-[^-]*$//')
+            if [ -n "$PROJECT_NAME" ]; then
+                echo "https://$PROJECT_NAME.amvera.io"
+                return
+            fi
         fi
     fi
     
-    # Последняя попытка - через переменные окружения LibreChat
+    # ПРИОРИТЕТ 6: Через переменные окружения LibreChat
     if [ -n "$DOMAIN_CLIENT" ]; then
         echo "https://$DOMAIN_CLIENT"
         return
     fi
     
-    # Если ничего не найдено, возвращаем заглушку
-    echo "https://your-project-name.amvera.io"
+    # ФИКСИРОВАННОЕ ЗНАЧЕНИЕ для вашего проекта (замените на реальный)
+    echo "https://nrlibre-neuralrunner.amvera.io"
 }
 
 # Validate required environment variables
@@ -69,13 +85,23 @@ fi
 DETECTED_DOMAIN=$(detect_amvera_domain)
 export OAUTH_CALLBACK_DOMAIN="${OAUTH_CALLBACK_DOMAIN:-$DETECTED_DOMAIN}"
 
-# ВАЖНО: Используем порт 8081 вместо 8080 для избежания конфликта
-export OAUTH_SERVER_PORT="8081"
+# ВАЖНО: Используем порт 8081 вместо 8080 для избежания конфликта с LibreChat
+export OAUTH_SERVER_PORT="${OAUTH_SERVER_PORT:-8081}"
 
-# Set OAuth callback URL variants for compatibility
-export OAUTH_CALLBACK_URL="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/oauth2callback"
-export OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/oauth2callback"
-export GOOGLE_OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/oauth2callback"
+# Определяем, используется ли внешний callback URL
+EXTERNAL_CALLBACK_URL="${OAUTH_CALLBACK_URL:-${GOOGLE_OAUTH_CALLBACK_URI:-${OAUTH_REDIRECT_URI}}}"
+
+if [ -n "$EXTERNAL_CALLBACK_URL" ]; then
+    # Используем предоставленный внешний URL
+    export OAUTH_CALLBACK_URL="$EXTERNAL_CALLBACK_URL"
+    export OAUTH_REDIRECT_URI="$EXTERNAL_CALLBACK_URL"
+    export GOOGLE_OAUTH_REDIRECT_URI="$EXTERNAL_CALLBACK_URL"
+else
+    # Формируем callback URL с доменом и портом
+    export OAUTH_CALLBACK_URL="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/oauth2callback"
+    export OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/oauth2callback"
+    export GOOGLE_OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/oauth2callback"
+fi
 
 # Alternative callback paths for different implementations
 export OAUTH_CALLBACK_URL_ALT1="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/auth/google/callback"
@@ -85,10 +111,10 @@ export OAUTH_CALLBACK_URL_ALT2="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/ap
 export WORKSPACE_MCP_BASE_URI="${OAUTH_CALLBACK_DOMAIN}"
 export WORKSPACE_MCP_PORT="${OAUTH_SERVER_PORT}"
 export GOOGLE_OAUTH_CALLBACK_URI="${OAUTH_CALLBACK_URL}"
-# Дополнительные переменные для совместимости
+
+# Дополнительные переменные для совместимости с исходным кодом
 export GOOGLE_OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_URL}"
 export OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_URL}"
-
 
 # Debug information
 log_debug "Starting Google Workspace MCP server"
@@ -99,6 +125,7 @@ log_debug "WORKSPACE_BASE_PATH: $WORKSPACE_BASE_PATH"
 log_debug "OAUTH_CALLBACK_DOMAIN: $OAUTH_CALLBACK_DOMAIN"
 log_debug "OAUTH_CALLBACK_URL: $OAUTH_CALLBACK_URL"
 log_debug "OAUTH_SERVER_PORT: $OAUTH_SERVER_PORT"
+log_debug "External callback URL provided: $([ -n "$EXTERNAL_CALLBACK_URL" ] && echo 'YES' || echo 'NO')"
 
 # Trap signals for clean shutdown
 trap 'log_info "Shutting down..."; exit 0' SIGTERM SIGINT
@@ -148,6 +175,8 @@ cat > /app/config/oauth-config.json << EOF
   "redirect_uri": "$OAUTH_CALLBACK_URL",
   "callback_domain": "$OAUTH_CALLBACK_DOMAIN",
   "callback_port": "$OAUTH_SERVER_PORT",
+  "server_host": "$OAUTH_SERVER_HOST",
+  "external_callback_provided": $([ -n "$EXTERNAL_CALLBACK_URL" ] && echo 'true' || echo 'false'),
   "alternative_redirect_uris": [
     "$OAUTH_CALLBACK_URL_ALT1",
     "$OAUTH_CALLBACK_URL_ALT2"
@@ -182,6 +211,8 @@ log_info "Starting Google Workspace MCP server from $(pwd)"
 log_info "OAuth Callback Domain: $OAUTH_CALLBACK_DOMAIN"
 log_info "OAuth Callback URL: $OAUTH_CALLBACK_URL"
 log_info "OAuth Server Port: $OAUTH_SERVER_PORT"
+log_info "OAuth Server Host: $OAUTH_SERVER_HOST"
+log_info "Using external callback: $([ -n "$EXTERNAL_CALLBACK_URL" ] && echo 'YES' || echo 'NO')"
 log_info "Executing: node build/index.js"
 
 # Execute the main application
