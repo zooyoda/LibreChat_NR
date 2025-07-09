@@ -26,23 +26,9 @@ export class AccountManager {
     this.oauthClient = new GoogleOAuthClient();
     this.tokenManager = new TokenManager(this.oauthClient);
     
-    // Set up automatic authentication completion
-    const { OAuthCallbackServer } = await import('./callback-server.js');
-    const callbackServer = OAuthCallbackServer.getInstance();
-    callbackServer.setAuthHandler(async (code: string) => {
-      if (this.currentAuthEmail) {
-        try {
-          logger.info(`Auto-completing authentication for ${this.currentAuthEmail}`);
-          const tokenData = await this.getTokenFromCode(code);
-          await this.saveToken(this.currentAuthEmail, tokenData);
-          logger.info(`Authentication completed automatically for ${this.currentAuthEmail}`);
-          this.currentAuthEmail = undefined;
-        } catch (error) {
-          logger.error('Failed to auto-complete authentication:', error);
-          this.currentAuthEmail = undefined;
-        }
-      }
-    });
+    // ИСПРАВЛЕНИЕ: Убрана логика с несуществующим методом setAuthHandler
+    // Автоматическое завершение аутентификации теперь обрабатывается 
+    // непосредственно в методах OAuth и callback-server
     
     await this.loadAccounts();
     logger.info('AccountManager initialized successfully');
@@ -400,5 +386,73 @@ export class AccountManager {
 
   async saveToken(email: string, tokenData: any) {
     return this.tokenManager.saveToken(email, tokenData);
+  }
+
+  // НОВЫЕ МЕТОДЫ: Для работы с обновленной системой OAuth
+  
+  /**
+   * Проверяет, используется ли внешний callback URL
+   * @returns true если используется внешний callback (например, для Amvera)
+   */
+  isUsingExternalCallback(): boolean {
+    return this.oauthClient.isUsingExternalCallback();
+  }
+
+  /**
+   * Получает текущий callback URL
+   * @returns URL для OAuth callback
+   */
+  getCurrentCallbackUrl(): string {
+    return this.oauthClient.getCurrentCallbackUrl();
+  }
+
+  /**
+   * Автоматически завершает аутентификацию для текущего пользователя
+   * @returns Promise с результатом аутентификации
+   */
+  async completeCurrentAuthentication(): Promise<{ success: boolean; message: string }> {
+    if (!this.currentAuthEmail) {
+      return {
+        success: false,
+        message: 'No authentication in progress'
+      };
+    }
+
+    try {
+      const code = await this.waitForAuthorizationCode();
+      const tokenData = await this.getTokenFromCode(code);
+      await this.saveToken(this.currentAuthEmail, tokenData);
+      
+      const email = this.currentAuthEmail;
+      this.currentAuthEmail = undefined;
+      
+      return {
+        success: true,
+        message: `Authentication completed successfully for ${email}`
+      };
+    } catch (error) {
+      const email = this.currentAuthEmail;
+      this.currentAuthEmail = undefined;
+      
+      return {
+        success: false,
+        message: `Authentication failed for ${email}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
+  }
+
+  /**
+   * Получает текущий email для аутентификации
+   * @returns email пользователя, проходящего аутентификацию, или undefined
+   */
+  getCurrentAuthEmail(): string | undefined {
+    return this.currentAuthEmail;
+  }
+
+  /**
+   * Очищает текущую аутентификацию
+   */
+  clearCurrentAuthentication(): void {
+    this.currentAuthEmail = undefined;
   }
 }
