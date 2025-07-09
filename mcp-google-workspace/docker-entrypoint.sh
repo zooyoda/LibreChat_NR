@@ -17,28 +17,36 @@ log_debug() {
 
 # Function to detect Amvera domain
 detect_amvera_domain() {
-    # Попытка определить домен Amvera из переменных окружения
+    # Проверяем переменные окружения Amvera
     if [ -n "$AMVERA_DOMAIN" ]; then
         echo "$AMVERA_DOMAIN"
-    elif [ -n "$VERCEL_URL" ]; then
+        return
+    fi
+    
+    # Пытаемся определить по заголовкам или другим переменным
+    if [ -n "$VERCEL_URL" ]; then
         echo "https://$VERCEL_URL"
-    elif [ -n "$HEROKU_APP_NAME" ]; then
-        echo "https://$HEROKU_APP_NAME.herokuapp.com"
-    else
-        # Попытка извлечь из HOST или других источников
-        local detected_domain=""
-        if [ -n "$HOST" ] && [ "$HOST" != "0.0.0.0" ] && [ "$HOST" != "localhost" ]; then
-            detected_domain="https://$HOST"
-        fi
-        
-        # Проверяем, не является ли это localhost
-        if echo "$detected_domain" | grep -q "localhost\|127.0.0.1"; then
-            log_debug "Detected localhost environment, using default domain"
-            echo "https://your-project-name.amvera.io"
-        else
-            echo "$detected_domain"
+        return
+    fi
+    
+    # Для Amvera пытаемся определить по переменным окружения
+    if [ -n "$HOSTNAME" ] && echo "$HOSTNAME" | grep -q "amvera"; then
+        # Извлекаем домен из hostname
+        DOMAIN=$(echo "$HOSTNAME" | sed 's/.*\.\(.*\.amvera\.io\)$/\1/')
+        if [ -n "$DOMAIN" ]; then
+            echo "https://$DOMAIN"
+            return
         fi
     fi
+    
+    # Последняя попытка - через переменные окружения LibreChat
+    if [ -n "$DOMAIN_CLIENT" ]; then
+        echo "https://$DOMAIN_CLIENT"
+        return
+    fi
+    
+    # Если ничего не найдено, возвращаем заглушку
+    echo "https://your-project-name.amvera.io"
 }
 
 # Validate required environment variables
@@ -61,14 +69,22 @@ fi
 DETECTED_DOMAIN=$(detect_amvera_domain)
 export OAUTH_CALLBACK_DOMAIN="${OAUTH_CALLBACK_DOMAIN:-$DETECTED_DOMAIN}"
 
+# ВАЖНО: Используем порт 8081 вместо 8080 для избежания конфликта
+export OAUTH_SERVER_PORT="8081"
+
 # Set OAuth callback URL variants for compatibility
-export OAUTH_CALLBACK_URL="${OAUTH_CALLBACK_DOMAIN}/oauth2callback"
-export OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_DOMAIN}/oauth2callback"
-export GOOGLE_OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_DOMAIN}/oauth2callback"
+export OAUTH_CALLBACK_URL="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/oauth2callback"
+export OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/oauth2callback"
+export GOOGLE_OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/oauth2callback"
 
 # Alternative callback paths for different implementations
-export OAUTH_CALLBACK_URL_ALT1="${OAUTH_CALLBACK_DOMAIN}/auth/google/callback"
-export OAUTH_CALLBACK_URL_ALT2="${OAUTH_CALLBACK_DOMAIN}/api/auth/google/callback"
+export OAUTH_CALLBACK_URL_ALT1="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/auth/google/callback"
+export OAUTH_CALLBACK_URL_ALT2="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/api/auth/google/callback"
+
+# Переменные для Google Workspace MCP
+export WORKSPACE_MCP_BASE_URI="${OAUTH_CALLBACK_DOMAIN}"
+export WORKSPACE_MCP_PORT="${OAUTH_SERVER_PORT}"
+export GOOGLE_OAUTH_CALLBACK_URI="${OAUTH_CALLBACK_URL}"
 
 # Debug information
 log_debug "Starting Google Workspace MCP server"
@@ -78,6 +94,7 @@ log_debug "GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:0:10}..."
 log_debug "WORKSPACE_BASE_PATH: $WORKSPACE_BASE_PATH"
 log_debug "OAUTH_CALLBACK_DOMAIN: $OAUTH_CALLBACK_DOMAIN"
 log_debug "OAUTH_CALLBACK_URL: $OAUTH_CALLBACK_URL"
+log_debug "OAUTH_SERVER_PORT: $OAUTH_SERVER_PORT"
 
 # Trap signals for clean shutdown
 trap 'log_info "Shutting down..."; exit 0' SIGTERM SIGINT
@@ -89,7 +106,6 @@ export NODE_ENV=production
 
 # OAuth server configuration
 export OAUTH_SERVER_HOST="0.0.0.0"
-export OAUTH_SERVER_PORT="8080"
 
 # Ensure workspace directory exists
 if [ ! -d "$WORKSPACE_BASE_PATH" ]; then
@@ -127,6 +143,7 @@ cat > /app/config/oauth-config.json << EOF
   "client_secret": "$GOOGLE_CLIENT_SECRET",
   "redirect_uri": "$OAUTH_CALLBACK_URL",
   "callback_domain": "$OAUTH_CALLBACK_DOMAIN",
+  "callback_port": "$OAUTH_SERVER_PORT",
   "alternative_redirect_uris": [
     "$OAUTH_CALLBACK_URL_ALT1",
     "$OAUTH_CALLBACK_URL_ALT2"
@@ -160,6 +177,7 @@ fi
 log_info "Starting Google Workspace MCP server from $(pwd)"
 log_info "OAuth Callback Domain: $OAUTH_CALLBACK_DOMAIN"
 log_info "OAuth Callback URL: $OAUTH_CALLBACK_URL"
+log_info "OAuth Server Port: $OAUTH_SERVER_PORT"
 log_info "Executing: node build/index.js"
 
 # Execute the main application
