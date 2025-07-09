@@ -183,11 +183,14 @@ export class OAuthCallbackServer {
           </html>
         `);
 
-        // Resolve any pending promises
+        // ИСПРАВЛЕНИЕ 1: Безопасная деструктуризация Map entries
         if (this.pendingPromises.size > 0) {
-          const [firstKey, firstPromise] = this.pendingPromises.entries().next().value;
-          firstPromise.resolve(code as string);
-          this.pendingPromises.delete(firstKey);
+          const firstEntry = this.pendingPromises.entries().next();
+          if (!firstEntry.done && firstEntry.value) {
+            const [firstKey, firstPromise] = firstEntry.value;
+            firstPromise.resolve(code as string);
+            this.pendingPromises.delete(firstKey);
+          }
         }
         
         // Also try to resolve by state
@@ -212,15 +215,17 @@ export class OAuthCallbackServer {
       }
     });
 
-    // Alternative callback endpoints for compatibility
+    // ИСПРАВЛЕНИЕ 2: Правильная реализация альтернативных callback endpoints
     this.app.get('/auth/google/callback', (req, res) => {
-      req.url = '/oauth2callback';
-      this.app.handle(req, res);
+      // Перенаправляем к основному callback endpoint
+      const { code, error, state } = req.query;
+      res.redirect(`/oauth2callback?code=${code}&error=${error}&state=${state}`);
     });
 
     this.app.get('/api/auth/google/callback', (req, res) => {
-      req.url = '/oauth2callback';
-      this.app.handle(req, res);
+      // Перенаправляем к основному callback endpoint
+      const { code, error, state } = req.query;
+      res.redirect(`/oauth2callback?code=${code}&error=${error}&state=${state}`);
     });
 
     // Error handling middleware
