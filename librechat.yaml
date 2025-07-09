@@ -2298,10 +2298,14 @@ mcpServers:
       GOOGLE_CLIENT_SECRET: "{{GOOGLE_CLIENT_SECRET}}"
       WORKSPACE_BASE_PATH: "/app/workspace"
       LOG_MODE: "strict"
+      # Переменные для корректного OAuth
+      WORKSPACE_MCP_BASE_URI: "https://your-actual-project-name.amvera.io"
+      WORKSPACE_MCP_PORT: "8081"
+      OAUTH_SERVER_PORT: "8081"
     customUserVars:
       GOOGLE_CLIENT_ID:
         title: "Google OAuth Client ID"
-        description: "OAuth 2.0 Client ID from Google Cloud Console. Create credentials at <a href='https://console.cloud.google.com/apis/credentials' target='_blank'>Google Cloud Console</a>."
+        description: "OAuth 2.0 Client ID from Google Cloud Console"
       GOOGLE_CLIENT_SECRET:
         title: "Google OAuth Client Secret"
         description: "OAuth 2.0 Client Secret from Google Cloud Console"
