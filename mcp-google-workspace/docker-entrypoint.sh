@@ -85,6 +85,10 @@ export OAUTH_CALLBACK_URL_ALT2="${OAUTH_CALLBACK_DOMAIN}:${OAUTH_SERVER_PORT}/ap
 export WORKSPACE_MCP_BASE_URI="${OAUTH_CALLBACK_DOMAIN}"
 export WORKSPACE_MCP_PORT="${OAUTH_SERVER_PORT}"
 export GOOGLE_OAUTH_CALLBACK_URI="${OAUTH_CALLBACK_URL}"
+# Дополнительные переменные для совместимости
+export GOOGLE_OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_URL}"
+export OAUTH_REDIRECT_URI="${OAUTH_CALLBACK_URL}"
+
 
 # Debug information
 log_debug "Starting Google Workspace MCP server"
