@@ -2298,17 +2298,19 @@ mcpServers:
       GOOGLE_CLIENT_SECRET: "{{GOOGLE_CLIENT_SECRET}}"
       WORKSPACE_BASE_PATH: "/app/workspace"
       LOG_MODE: "strict"
-      # Переменные для корректного OAuth
-      WORKSPACE_MCP_BASE_URI: "https://your-actual-project-name.amvera.io"
-      WORKSPACE_MCP_PORT: "8081"
-      OAUTH_SERVER_PORT: "8081"
-      # Принудительно задаем правильный домен
+      # Основные переменные для OAuth
       AMVERA_DOMAIN: "https://nrlibre-neuralrunner.amvera.io"
       OAUTH_CALLBACK_DOMAIN: "https://nrlibre-neuralrunner.amvera.io"
+      WORKSPACE_MCP_BASE_URI: "https://nrlibre-neuralrunner.amvera.io"
+      # Настройки портов
+      WORKSPACE_MCP_PORT: "8081"
+      OAUTH_SERVER_PORT: "8081"
+      # Принудительно задаем callback URL без порта
+      OAUTH_CALLBACK_URL: "https://nrlibre-neuralrunner.amvera.io/oauth2callback"
     customUserVars:
       GOOGLE_CLIENT_ID:
         title: "Google OAuth Client ID"
-        description: "OAuth 2.0 Client ID from Google Cloud Console"
+        description: "OAuth 2.0 Client ID from Google Cloud Console. Create credentials at <a href='https://console.cloud.google.com/apis/credentials' target='_blank'>Google Cloud Console</a>."
       GOOGLE_CLIENT_SECRET:
         title: "Google OAuth Client Secret"
         description: "OAuth 2.0 Client Secret from Google Cloud Console"
