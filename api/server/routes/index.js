@@ -61,4 +61,5 @@ module.exports = {
   categories,
   staticRoute,
   mcp,
+  oauthCallbackRouter,
 };
