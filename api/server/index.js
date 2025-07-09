@@ -91,6 +91,10 @@ const startServer = async () => {
     await configureSocialLogins(app);
   }
 
+  // ✅ ДОБАВЛЕНО: OAuth callback роутер для Google Workspace MCP
+  // Должен быть подключен БЕЗ префикса /api
+  app.use('/', routes.oauthCallbackRouter);
+
   app.use('/oauth', routes.oauth);
   /* API Endpoints */
   app.use('/api/auth', routes.auth);
