@@ -2,7 +2,7 @@ FROM node:20.19-alpine
 
 WORKDIR /app
 
-# Установка дополнительных системных зависимостей
+# Установка дополнительных системных зависимостей (добавлен file)
 RUN apk add --no-cache \
     bash \
     curl \
@@ -10,6 +10,7 @@ RUN apk add --no-cache \
     python3 \
     make \
     g++ \
+    file \
     && rm -rf /var/cache/apk/*
 
 # Копируем package.json для всех подпроектов
@@ -77,7 +78,7 @@ RUN echo "=== Building MCP-FETCH ===" \
     && npm prune --omit=dev \
     && echo "✅ MCP-FETCH built successfully"
 
-# MCP-GOOGLE-WORKSPACE: ПОЛНАЯ ВЕРСИЯ С ИСПРАВЛЕНИЯМИ
+# MCP-GOOGLE-WORKSPACE: ИСПРАВЛЕННАЯ ВЕРСИЯ
 WORKDIR /app/mcp-google-workspace
 
 # Этап 1: Диагностика начального состояния
@@ -144,11 +145,14 @@ RUN echo "=== Cleaning dev dependencies ===" \
     && npm prune --omit=dev \
     && echo "✅ Dev dependencies cleaned"
 
-# Этап 10: Финальная проверка
+# Этап 10: ИСПРАВЛЕННАЯ финальная проверка
 RUN echo "=== Final verification ===" \
     && ls -la build/index.js \
     && stat build/index.js \
-    && file build/index.js \
+    && echo "=== File content preview ===" \
+    && head -5 build/index.js \
+    && echo "=== Node.js syntax check ===" \
+    && node -c build/index.js \
     && echo "✅ Google Workspace MCP build completed successfully"
 
 # Возвращаемся в корневой каталог
