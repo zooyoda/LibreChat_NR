@@ -6,6 +6,7 @@ import logger from '../../utils/logger.js';
 export class GoogleOAuthClient {
   private oauth2Client: OAuth2Client;
   private callbackServer: OAuthCallbackServer;
+  private lastAuthEmail?: string;
 
   constructor() {
     const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -22,83 +23,58 @@ export class GoogleOAuthClient {
     this.callbackServer = OAuthCallbackServer.getInstance();
     logger.info('Initializing OAuth client...');
 
-    // ИСПРАВЛЕНИЕ: Используем переменные окружения для callback URL
     const callbackUrl = this.getCallbackUrl();
-    
+
     this.oauth2Client = new OAuth2Client(
       clientId,
       clientSecret,
       callbackUrl
     );
-    
+
     logger.info(`OAuth client initialized with callback: ${callbackUrl}`);
 
-    // Ensure the callback server is running
     this.callbackServer.ensureServerRunning().catch(error => {
       logger.error('Failed to start OAuth callback server:', error);
     });
   }
 
-  // НОВЫЙ МЕТОД: Определение callback URL из переменных окружения
   private getCallbackUrl(): string {
-    // Приоритет переменных окружения для внешних доменов
-    const externalCallbackUrl = process.env.OAUTH_CALLBACK_URL || 
-                               process.env.GOOGLE_OAUTH_CALLBACK_URI ||
-                               process.env.OAUTH_REDIRECT_URI;
-    
+    const externalCallbackUrl = process.env.OAUTH_CALLBACK_URL ||
+      process.env.GOOGLE_OAUTH_CALLBACK_URI ||
+      process.env.OAUTH_REDIRECT_URI;
+
     if (externalCallbackUrl) {
       logger.info(`Using external callback URL: ${externalCallbackUrl}`);
       return externalCallbackUrl;
     }
 
-    // Fallback на localhost для локальной разработки
     const port = process.env.OAUTH_SERVER_PORT || process.env.WORKSPACE_MCP_PORT || '8080';
     const localCallbackUrl = `http://localhost:${port}/oauth2callback`;
-    
+
     logger.info(`Using local callback URL: ${localCallbackUrl}`);
     return localCallbackUrl;
   }
 
-  getAuthClient(): OAuth2Client {
-    return this.oauth2Client;
-  }
-
-  /**
-   * Generates the OAuth authorization URL
-   * IMPORTANT: When using the generated URL, always use it exactly as returned.
-   * Do not attempt to modify, reformat, or reconstruct the URL as this can break
-   * the authentication flow. The URL contains carefully encoded parameters that
-   * must be preserved exactly as provided.
-   */
-  async generateAuthUrl(scopes: string[]): Promise<string> {
+  // Ключевой метод: email передается через login_hint
+  async generateAuthUrl(scopes: string[], email?: string): Promise<string> {
     logger.info('Generating OAuth authorization URL');
-    
-    const url = this.oauth2Client.generateAuthUrl({
+    this.lastAuthEmail = email;
+    const opts: any = {
       access_type: 'offline',
       scope: scopes,
       prompt: 'consent',
-      state: Math.random().toString(36).substring(7) // Добавляем state для безопасности
-    });
-    
+      state: Math.random().toString(36).substring(7)
+    };
+    if (email) {
+      opts.login_hint = email;
+    }
+    const url = this.oauth2Client.generateAuthUrl(opts);
     logger.debug('Authorization URL generated successfully');
     return url;
   }
 
   async waitForAuthorizationCode(): Promise<string> {
     logger.info('Starting OAuth callback server and waiting for authorization...');
-    
-    // Проверяем, используется ли внешний callback URL
-    const externalCallbackUrl = process.env.OAUTH_CALLBACK_URL || 
-                               process.env.GOOGLE_OAUTH_CALLBACK_URI ||
-                               process.env.OAUTH_REDIRECT_URI;
-    
-    if (externalCallbackUrl) {
-      logger.info('External callback URL detected, waiting for authorization code...');
-      // Для внешних URL используем специальный метод ожидания
-      return await this.callbackServer.waitForAuthorizationCode();
-    }
-    
-    // Для локальной разработки используем локальный сервер
     return await this.callbackServer.waitForAuthorizationCode();
   }
 
@@ -137,16 +113,18 @@ export class GoogleOAuthClient {
     }
   }
 
-  // НОВЫЙ МЕТОД: Получение текущего callback URL
+  getAuthClient(): OAuth2Client {
+    return this.oauth2Client;
+  }
+
   getCurrentCallbackUrl(): string {
     return this.getCallbackUrl();
   }
 
-  // НОВЫЙ МЕТОД: Проверка, используется ли внешний callback
   isUsingExternalCallback(): boolean {
-    const externalCallbackUrl = process.env.OAUTH_CALLBACK_URL || 
-                               process.env.GOOGLE_OAUTH_CALLBACK_URI ||
-                               process.env.OAUTH_REDIRECT_URI;
+    const externalCallbackUrl = process.env.OAUTH_CALLBACK_URL ||
+      process.env.GOOGLE_OAUTH_CALLBACK_URI ||
+      process.env.OAUTH_REDIRECT_URI;
     return !!externalCallbackUrl;
   }
 }
