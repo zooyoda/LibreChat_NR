@@ -2287,33 +2287,33 @@ mcpServers:
     env:
       NODE_ENV: "production"
 
-  google-workspace:
-    type: stdio
-    command: "sh"
-    args: ["/app/mcp-google-workspace/docker-entrypoint.sh"]
-    timeout: 120000
-    initTimeout: 60000
-    env:
-      GOOGLE_CLIENT_ID: "{{GOOGLE_CLIENT_ID}}"
-      GOOGLE_CLIENT_SECRET: "{{GOOGLE_CLIENT_SECRET}}"
-      WORKSPACE_BASE_PATH: "/app/workspace"
-      LOG_MODE: "strict"
-      # Основные переменные для OAuth
-      AMVERA_DOMAIN: "https://nrlibre-neuralrunner.amvera.io"
-      OAUTH_CALLBACK_DOMAIN: "https://nrlibre-neuralrunner.amvera.io"
-      WORKSPACE_MCP_BASE_URI: "https://nrlibre-neuralrunner.amvera.io"
-      # Настройки портов
-      WORKSPACE_MCP_PORT: "8081"
-      OAUTH_SERVER_PORT: "8081"
+#  google-workspace:
+#    type: stdio
+#    command: "sh"
+#    args: ["/app/mcp-google-workspace/docker-entrypoint.sh"]
+#    timeout: 120000
+#    initTimeout: 60000
+#    env:
+#      GOOGLE_CLIENT_ID: "{{GOOGLE_CLIENT_ID}}"
+#      GOOGLE_CLIENT_SECRET: "{{GOOGLE_CLIENT_SECRET}}"
+#      WORKSPACE_BASE_PATH: "/app/workspace"
+#      LOG_MODE: "strict"
+#      # Основные переменные для OAuth
+#      AMVERA_DOMAIN: "https://nrlibre-neuralrunner.amvera.io"
+#      OAUTH_CALLBACK_DOMAIN: "https://nrlibre-neuralrunner.amvera.io"
+#      WORKSPACE_MCP_BASE_URI: "https://nrlibre-neuralrunner.amvera.io"
+#      # Настройки портов
+#      WORKSPACE_MCP_PORT: "8081"
+#      OAUTH_SERVER_PORT: "8081"
       # Принудительно задаем callback URL без порта
-      OAUTH_CALLBACK_URL: "https://nrlibre-neuralrunner.amvera.io/oauth2callback"
-    customUserVars:
-      GOOGLE_CLIENT_ID:
-        title: "Google OAuth Client ID"
-        description: "OAuth 2.0 Client ID from Google Cloud Console. Create credentials at <a href='https://console.cloud.google.com/apis/credentials' target='_blank'>Google Cloud Console</a>."
-      GOOGLE_CLIENT_SECRET:
-        title: "Google OAuth Client Secret"
-        description: "OAuth 2.0 Client Secret from Google Cloud Console"
+ #     OAUTH_CALLBACK_URL: "https://nrlibre-neuralrunner.amvera.io/oauth2callback"
+ #   customUserVars:
+ #     GOOGLE_CLIENT_ID:
+ #       title: "Google OAuth Client ID"
+ #       description: "OAuth 2.0 Client ID from Google Cloud Console. Create credentials at <a href='https://console.cloud.google.com/apis/credentials' target='_blank'>Google Cloud Console</a>."
+ #     GOOGLE_CLIENT_SECRET:
+ #       title: "Google OAuth Client Secret"
+ #       description: "OAuth 2.0 Client Secret from Google Cloud Console"
 
   # playwright:
   #  type: stdio
