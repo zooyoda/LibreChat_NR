@@ -2,41 +2,37 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../../utils/logger');
 
-// Простое временное in-memory хранилище для state→email
-const stateEmailMap = new Map();
-// Для очистки устаревших state (через 10 минут)
-const STATE_TTL_MS = 10 * 60 * 1000;
+// === IPC/STDIN взаимодействие с MCP ===
 
-function setStateEmail(state, email) {
-  stateEmailMap.set(state, { email, created: Date.now() });
-  // Очистка устаревших записей
-  for (const [key, value] of stateEmailMap.entries()) {
-    if (Date.now() - value.created > STATE_TTL_MS) {
-      stateEmailMap.delete(key);
+// Функция отправки authorization code в MCP через stdio
+function sendAuthCodeToMCP(code, state) {
+  // Формируем сообщение для MCP в формате JSON по протоколу stdio
+  const message = JSON.stringify({
+    type: 'oauth_callback',
+    code,
+    state,
+    timestamp: Date.now()
+  }) + '\n';
+
+  // Отправляем в stdout процесса MCP (предполагается, что MCP слушает stdin)
+  try {
+    if (process.send) {
+      // Если запущено как дочерний процесс через fork (cluster/child_process)
+      process.send({ mcp_oauth_callback: { code, state } });
+      logger.info('Authorization code sent to MCP via process.send');
+    } else if (process.stdin && process.stdin.writable) {
+      process.stdin.write(message);
+      logger.info('Authorization code sent to MCP via stdin');
+    } else {
+      logger.error('Unable to send code to MCP: no IPC channel or writable stdin');
+      return false;
     }
+    return true;
+  } catch (err) {
+    logger.error('Failed to send authorization code to MCP:', err);
+    return false;
   }
 }
-
-function getEmailByState(state) {
-  const entry = stateEmailMap.get(state);
-  if (!entry) return null;
-  // Автоматическая очистка по TTL
-  if (Date.now() - entry.created > STATE_TTL_MS) {
-    stateEmailMap.delete(state);
-    return null;
-  }
-  return entry.email;
-}
-
-// API для сохранения state→email (вызывать из backend до генерации OAuth ссылки)
-router.post('/api/oauth/save-state', (req, res) => {
-  const { state, email } = req.body;
-  if (!state || !email) {
-    return res.status(400).json({ error: 'Missing state or email' });
-  }
-  setStateEmail(state, email);
-  res.json({ success: true });
-});
 
 // OAuth callback handler для Google Workspace MCP
 router.get('/oauth2callback', async (req, res) => {
@@ -57,60 +53,66 @@ router.get('/oauth2callback', async (req, res) => {
       });
     }
 
-    // Получаем email по state из памяти (если был сохранен)
-    const email = state ? getEmailByState(state) : null;
+    // === IPC: Автоматически передаем code в MCP ===
+    const sent = sendAuthCodeToMCP(code, state);
 
-    // Успешная страница с кодом для пользователя
-    res.send(`
-      <html>
-        <head>
-          <title>Google OAuth Success</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .container { max-width: 600px; margin: 0 auto; }
-            .success { color: #28a745; }
-            .code { background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; }
-            .instructions { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1 class="success">✅ Google OAuth Authorization Successful!</h1>
-            <p>Your Google account has been successfully authorized.</p>
-            <div class="instructions">
-              <h3>Next Steps:</h3>
-              <ol>
-                <li>Copy the authorization code below</li>
-                <li>Return to LibreChat</li>
-                <li>Use the tool <strong>authenticate_workspace_account</strong> with the parameter <strong>auth_code</strong>${email ? ` and <strong>email</strong> (${email})` : ''}</li>
-              </ol>
+    if (sent) {
+      // Показываем пользователю страницу успешной авторизации
+      res.send(`
+        <html>
+          <head>
+            <title>Google OAuth Success</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 40px; }
+              .container { max-width: 600px; margin: 0 auto; }
+              .success { color: #28a745; }
+              .instructions { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1 class="success">✅ Google OAuth Authorization Successful!</h1>
+              <p>Your Google account has been successfully authorized. You may now return to LibreChat.</p>
+              <div class="instructions">
+                <p>If this window does not close automatically, you can close it manually.</p>
+              </div>
+              <script>
+                setTimeout(() => window.close(), 1500);
+              </script>
             </div>
-            <h3>Authorization Code:</h3>
-            <div class="code">${code}</div>
-            ${email ? `<p><strong>Email:</strong> ${email}</p>` : ''}
-            <p><small>State: ${state}</small></p>
-            <script>
-              // Автоматически выделяем код для копирования
-              document.addEventListener('DOMContentLoaded', function() {
-                const codeElement = document.querySelector('.code');
-                if (codeElement) {
-                  codeElement.addEventListener('click', function() {
-                    const selection = window.getSelection();
-                    const range = document.createRange();
-                    range.selectNodeContents(codeElement);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                  });
-                }
-              });
-            </script>
-          </div>
-        </body>
-      </html>
-    `);
-
-    logger.info('OAuth callback processed successfully for Google Workspace MCP');
-
+          </body>
+        </html>
+      `);
+      logger.info('OAuth callback processed and code sent to MCP');
+    } else {
+      // Fallback: показываем код для ручного завершения
+      res.send(`
+        <html>
+          <head>
+            <title>Google OAuth Success (Manual Action Required)</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 40px; }
+              .container { max-width: 600px; margin: 0 auto; }
+              .warning { color: #d9534f; }
+              .code { background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; }
+              .instructions { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1 class="warning">⚠️ Authorization Code Not Delivered Automatically</h1>
+              <p>Copy the authorization code below and paste it into LibreChat using the <b>authenticate_workspace_account</b> tool.</p>
+              <div class="instructions">
+                <h3>Authorization Code:</h3>
+                <div class="code">${code}</div>
+                <p><small>State: ${state}</small></p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `);
+      logger.warn('Authorization code could not be sent to MCP automatically; manual action required');
+    }
   } catch (error) {
     logger.error('OAuth callback error:', error);
     res.status(500).json({
