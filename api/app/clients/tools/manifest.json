@@ -26,6 +26,26 @@
     "isAuthRequired": true
   },
   {
+    "name": "Google Workspace",
+    "pluginKey": "google_workspace",
+    "description": "Интеграция с Google Workspace: Gmail, Drive, Calendar, Contacts",
+    "icon": "https://developers.google.com/static/workspace/images/workspace-logo.svg",
+    "authConfig": [
+      {
+        "authField": "GOOGLE_CLIENT_ID",
+        "label": "Google OAuth Client ID",
+        "description": "OAuth 2.0 Client ID из Google Cloud Console"
+      },
+      {
+        "authField": "GOOGLE_CLIENT_SECRET",
+        "label": "Google OAuth Client Secret",
+        "description": "OAuth 2.0 Client Secret из Google Cloud Console"
+      }
+    ],
+    "authenticated": false,
+    "isAuthRequired": true
+  },
+  {
     "name": "Traversaal",
     "pluginKey": "traversaal_search",
     "description": "Traversaal is a robust search API tailored for LLM Agents. Get an API key here: https://api.traversaal.ai",
