@@ -4,5 +4,4 @@ meta:
 run:
   containerPort: 3080
   servicePort: 80
-  ports:
-    - 8081:8081
+ 
