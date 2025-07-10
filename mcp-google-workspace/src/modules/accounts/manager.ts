@@ -14,9 +14,10 @@ export class AccountManager {
   private currentAuthEmail?: string;
 
   constructor(config?: AccountModuleConfig) {
-    // Use environment variable or config, fallback to Docker default
-    const defaultPath = process.env.ACCOUNTS_PATH || 
-                       (process.env.MCP_MODE ? path.resolve(process.env.HOME || '', '.mcp/google-workspace-mcp/accounts.json') : '/app/config/accounts.json');
+    const defaultPath = process.env.ACCOUNTS_PATH ||
+      (process.env.MCP_MODE
+        ? path.resolve(process.env.HOME || '', '.mcp/google-workspace-mcp/accounts.json')
+        : '/app/config/accounts.json');
     this.accountsPath = config?.accountsPath || defaultPath;
     this.accounts = new Map();
   }
@@ -25,11 +26,6 @@ export class AccountManager {
     logger.info('Initializing AccountManager...');
     this.oauthClient = new GoogleOAuthClient();
     this.tokenManager = new TokenManager(this.oauthClient);
-    
-    // ИСПРАВЛЕНИЕ: Убрана логика с несуществующим методом setAuthHandler
-    // Автоматическое завершение аутентификации теперь обрабатывается 
-    // непосредственно в методах OAuth и callback-server
-    
     await this.loadAccounts();
     logger.info('AccountManager initialized successfully');
   }
@@ -37,50 +33,33 @@ export class AccountManager {
   async listAccounts(): Promise<Account[]> {
     logger.debug('Listing accounts with auth status');
     const accounts = Array.from(this.accounts.values());
-    
-    // Add auth status to each account and attempt auto-renewal if needed
     for (const account of accounts) {
       const renewalResult = await this.tokenManager.autoRenewToken(account.email);
-      
       if (renewalResult.success) {
         account.auth_status = {
           valid: true,
-          status: renewalResult.status
+          status: renewalResult.status,
         };
       } else {
-        // If auto-renewal failed, try to get an auth URL for re-authentication
         account.auth_status = {
           valid: false,
           status: renewalResult.status,
           reason: renewalResult.reason,
-          authUrl: await this.generateAuthUrl()
+          authUrl: await this.generateAuthUrl(),
         };
       }
     }
-    
     logger.debug(`Found ${accounts.length} accounts`);
     return accounts;
   }
 
-  /**
-   * Wrapper for tool operations that handles token renewal
-   * @param email Account email
-   * @param operation Function that performs the actual operation
-   */
-  async withTokenRenewal<T>(
-    email: string,
-    operation: () => Promise<T>
-  ): Promise<T> {
+  async withTokenRenewal<T>(email: string, operation: () => Promise<T>): Promise<T> {
     try {
-      // Attempt auto-renewal before operation
       const renewalResult = await this.tokenManager.autoRenewToken(email);
       if (!renewalResult.success) {
         if (renewalResult.canRetry) {
-          // If it's a temporary error, let the operation proceed
-          // The 401 handler below will catch and retry if needed
           logger.warn('Token renewal failed but may be temporary - proceeding with operation');
         } else {
-          // Only require re-auth if refresh token is invalid/revoked
           throw new AccountError(
             'Token renewal failed',
             'TOKEN_RENEWAL_FAILED',
@@ -88,30 +67,21 @@ export class AccountManager {
           );
         }
       }
-
-      // Perform the operation
       return await operation();
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === '401') {
-        // If we get a 401 during operation, try one more token renewal
         logger.warn('Received 401 during operation, attempting final token renewal');
         const finalRenewal = await this.tokenManager.autoRenewToken(email);
-        
         if (finalRenewal.success) {
-          // Retry the operation with renewed token
           return await operation();
         }
-        
-        // Check if we should trigger full OAuth
         if (!finalRenewal.canRetry) {
-          // Refresh token is invalid/revoked, need full reauth
           throw new AccountError(
             'Authentication failed',
             'AUTH_REQUIRED',
             finalRenewal.reason || 'Please re-authenticate your account'
           );
         } else {
-          // Temporary error, let caller handle retry
           throw new AccountError(
             'Token refresh failed temporarily',
             'TEMPORARY_AUTH_ERROR',
@@ -131,15 +101,12 @@ export class AccountManager {
   private async loadAccounts(): Promise<void> {
     try {
       logger.debug(`Loading accounts from ${this.accountsPath}`);
-      // Ensure directory exists
       await fs.mkdir(path.dirname(this.accountsPath), { recursive: true });
-      
       let data: string;
       try {
         data = await fs.readFile(this.accountsPath, 'utf-8');
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-          // Create empty accounts file if it doesn't exist
           logger.info('Creating new accounts file');
           data = JSON.stringify({ accounts: [] });
           await fs.writeFile(this.accountsPath, data);
@@ -151,7 +118,6 @@ export class AccountManager {
           );
         }
       }
-
       try {
         const config = JSON.parse(data) as AccountsConfig;
         this.accounts.clear();
@@ -180,12 +146,9 @@ export class AccountManager {
   private async saveAccounts(): Promise<void> {
     try {
       const config: AccountsConfig = {
-        accounts: Array.from(this.accounts.values())
+        accounts: Array.from(this.accounts.values()),
       };
-      await fs.writeFile(
-        this.accountsPath,
-        JSON.stringify(config, null, 2)
-      );
+      await fs.writeFile(this.accountsPath, JSON.stringify(config, null, 2));
     } catch (error) {
       throw new AccountError(
         'Failed to save accounts configuration',
@@ -205,7 +168,6 @@ export class AccountManager {
         'Please provide a valid email address'
       );
     }
-
     if (this.accounts.has(email)) {
       throw new AccountError(
         'Account already exists',
@@ -213,13 +175,11 @@ export class AccountManager {
         'Use updateAccount to modify existing accounts'
       );
     }
-
     const account: Account = {
       email,
       category,
-      description
+      description,
     };
-
     this.accounts.set(email, account);
     await this.saveAccounts();
     return account;
@@ -234,12 +194,10 @@ export class AccountManager {
         'Please ensure the account exists before updating'
       );
     }
-
     const updatedAccount: Account = {
       ...account,
-      ...updates
+      ...updates,
     };
-
     this.accounts.set(email, updatedAccount);
     await this.saveAccounts();
     return updatedAccount;
@@ -255,11 +213,7 @@ export class AccountManager {
         'Cannot remove non-existent account'
       );
     }
-
-    // Delete token first
     await this.tokenManager.deleteToken(email);
-    
-    // Then remove account
     this.accounts.delete(email);
     await this.saveAccounts();
     logger.info(`Successfully removed account: ${email}`);
@@ -277,9 +231,7 @@ export class AccountManager {
     logger.debug(`Validating account: ${email}`);
     let account = await this.getAccount(email);
     const isNewAccount: boolean = Boolean(!account && category && description);
-
     try {
-      // Handle new account creation
       if (isNewAccount && category && description) {
         logger.info('Creating new account during validation');
         account = await this.addAccount(email, category, description);
@@ -290,29 +242,23 @@ export class AccountManager {
           'Please provide category and description for new accounts'
         );
       }
-
-      // Validate token with appropriate flags for new accounts
       const tokenStatus = await this.tokenManager.validateToken(email, isNewAccount);
-      
-      // Map token status to account auth status
       switch (tokenStatus.status) {
         case 'NO_TOKEN':
           account.auth_status = {
             valid: false,
             status: tokenStatus.status,
             reason: isNewAccount ? 'New account requires authentication' : 'No token found',
-            authUrl: await this.generateAuthUrl()
+            authUrl: await this.generateAuthUrl(),
           };
           break;
-          
         case 'VALID':
         case 'REFRESHED':
           account.auth_status = {
             valid: true,
-            status: tokenStatus.status
+            status: tokenStatus.status,
           };
           break;
-          
         case 'INVALID':
         case 'REFRESH_FAILED':
         case 'EXPIRED':
@@ -320,23 +266,20 @@ export class AccountManager {
             valid: false,
             status: tokenStatus.status,
             reason: tokenStatus.reason,
-            authUrl: await this.generateAuthUrl()
+            authUrl: await this.generateAuthUrl(),
           };
           break;
-          
         case 'ERROR':
           account.auth_status = {
             valid: false,
             status: tokenStatus.status,
             reason: 'Authentication error occurred',
-            authUrl: await this.generateAuthUrl()
+            authUrl: await this.generateAuthUrl(),
           };
           break;
       }
-
       logger.debug(`Account validation complete for ${email}. Status: ${tokenStatus.status}`);
       return account;
-      
     } catch (error) {
       logger.error('Account validation failed', error as Error);
       if (error instanceof AccountError) {
@@ -350,12 +293,11 @@ export class AccountManager {
     }
   }
 
-  // OAuth related methods
   async generateAuthUrl(): Promise<string> {
     const allScopes = scopeRegistry.getAllScopes();
     return this.oauthClient.generateAuthUrl(allScopes);
   }
-  
+
   async startAuthentication(email: string): Promise<string> {
     this.currentAuthEmail = email;
     logger.info(`Starting authentication for ${email}`);
@@ -379,7 +321,6 @@ export class AccountManager {
     return this.oauthClient.getAuthClient();
   }
 
-  // Token related methods
   async validateToken(email: string, skipValidationForNew: boolean = false) {
     return this.tokenManager.validateToken(email, skipValidationForNew);
   }
@@ -388,70 +329,45 @@ export class AccountManager {
     return this.tokenManager.saveToken(email, tokenData);
   }
 
-  // НОВЫЕ МЕТОДЫ: Для работы с обновленной системой OAuth
-  
-  /**
-   * Проверяет, используется ли внешний callback URL
-   * @returns true если используется внешний callback (например, для Amvera)
-   */
   isUsingExternalCallback(): boolean {
     return this.oauthClient.isUsingExternalCallback();
   }
 
-  /**
-   * Получает текущий callback URL
-   * @returns URL для OAuth callback
-   */
   getCurrentCallbackUrl(): string {
     return this.oauthClient.getCurrentCallbackUrl();
   }
 
-  /**
-   * Автоматически завершает аутентификацию для текущего пользователя
-   * @returns Promise с результатом аутентификации
-   */
   async completeCurrentAuthentication(): Promise<{ success: boolean; message: string }> {
     if (!this.currentAuthEmail) {
       return {
         success: false,
-        message: 'No authentication in progress'
+        message: 'No authentication in progress',
       };
     }
-
     try {
       const code = await this.waitForAuthorizationCode();
       const tokenData = await this.getTokenFromCode(code);
       await this.saveToken(this.currentAuthEmail, tokenData);
-      
       const email = this.currentAuthEmail;
       this.currentAuthEmail = undefined;
-      
       return {
         success: true,
-        message: `Authentication completed successfully for ${email}`
+        message: `Authentication completed successfully for ${email}`,
       };
     } catch (error) {
       const email = this.currentAuthEmail;
       this.currentAuthEmail = undefined;
-      
       return {
         success: false,
-        message: `Authentication failed for ${email}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Authentication failed for ${email}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
   }
 
-  /**
-   * Получает текущий email для аутентификации
-   * @returns email пользователя, проходящего аутентификацию, или undefined
-   */
   getCurrentAuthEmail(): string | undefined {
     return this.currentAuthEmail;
   }
 
-  /**
-   * Очищает текущую аутентификацию
-   */
   clearCurrentAuthentication(): void {
     this.currentAuthEmail = undefined;
   }
