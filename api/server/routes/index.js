@@ -28,9 +28,6 @@ const keys = require('./keys');
 const user = require('./user');
 const ask = require('./ask');
 const mcp = require('./mcp');
-const oauthCallbackRouter = require('./oauth-callback');
-const { handleGoogleWorkspaceCallback } = require('../controllers/auth/googleWorkspaceCallback');
-router.get('/oauth/google/workspace/callback', handleGoogleWorkspaceCallback);
 
 module.exports = {
   ask,
@@ -63,5 +60,4 @@ module.exports = {
   categories,
   staticRoute,
   mcp,
-  oauthCallbackRouter,
 };
