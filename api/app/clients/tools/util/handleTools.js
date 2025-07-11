@@ -3,6 +3,7 @@ const { logger } = require('@librechat/data-schemas');
 const { SerpAPI } = require('@langchain/community/tools/serpapi');
 const { Calculator } = require('@langchain/community/tools/calculator');
 const { WordPressJWTAPI } = require('../');
+const { google_workspace: GoogleWorkspace } = require('../');
 const { EnvVar, createCodeExecutionTool, createSearchTool } = require('@librechat/agents');
 const { Tools, EToolResources, loadWebSearchAuth, replaceSpecialVars } = require('librechat-data-provider');
 
@@ -14,7 +15,6 @@ const {
   DALLE3,
   FluxAPI,
   OpenWeather,
-  google_workspace: GoogleWorkspace,
   StructuredSD,
   StructuredACS,
   TraversaalSearch,
