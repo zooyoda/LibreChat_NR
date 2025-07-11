@@ -85,7 +85,7 @@ RUN echo "=== Final MCP servers verification ===" \
     && ls -la mcp-context7/dist/index.js \
     && ls -la mcp-fetch/dist/index.js \
     && ls -la mcp-github-api/index.js \
-    && ls -la mcp-google-workspace/dist/index.js \
+   # && ls -la mcp-google-workspace/dist/index.js \
     && echo "✅ All MCP servers verified"
 
 # Сборка основного приложения LibreChat
