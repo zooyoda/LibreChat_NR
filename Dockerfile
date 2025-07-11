@@ -23,12 +23,11 @@ COPY mcp-telegram/package*.json ./mcp-telegram/
 COPY sequentialthinking-mcp/package*.json ./sequentialthinking-mcp/
 COPY mcp-context7/package*.json ./mcp-context7/
 COPY mcp-fetch/package*.json ./mcp-fetch/
-# УДАЛЕНО: COPY mcp-google-workspace/package*.json ./mcp-google-workspace/
+# Добавляем поддержку Google Workspace
+COPY mcp-google-workspace/package*.json ./mcp-google-workspace/
 
 # Копируем исходный код
 COPY . .
-
-# УДАЛЕНО: Установка прав и сборка MCP Google Workspace
 
 # Создаем необходимые директории
 RUN mkdir -p /app/config /app/logs /app/workspace \
@@ -40,6 +39,9 @@ USER node
 
 # Устанавливаем dev-зависимости для сборки всего проекта
 RUN npm ci --include=dev
+
+# Устанавливаем Google APIs в корневой проект
+RUN npm install googleapis google-auth-library
 
 # MCP-GITHUB-API
 WORKDIR /app/mcp-github-api
@@ -68,17 +70,22 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# УДАЛЕНО: MCP-GOOGLE-WORKSPACE
+# GOOGLE WORKSPACE - собираем TypeScript код для возможного использования
+WORKDIR /app/mcp-google-workspace
+RUN npm install
+RUN npm run build
+RUN npm prune --omit=dev
 
 # Возвращаемся в корневой каталог
 WORKDIR /app
 
-# Финальная проверка всех MCP серверов (без google-workspace)
+# Финальная проверка всех MCP серверов
 RUN echo "=== Final MCP servers verification ===" \
     && ls -la sequentialthinking-mcp/dist/index.js \
     && ls -la mcp-context7/dist/index.js \
     && ls -la mcp-fetch/dist/index.js \
     && ls -la mcp-github-api/index.js \
+    && ls -la mcp-google-workspace/dist/index.js \
     && echo "✅ All MCP servers verified"
 
 # Сборка основного приложения LibreChat
