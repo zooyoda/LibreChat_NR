@@ -19,6 +19,7 @@ const {
   DALLE3,
   FluxAPI,
   OpenWeather,
+  google_workspace: GoogleWorkspace,
   StructuredSD,
   StructuredACS,
   TraversaalSearch,
