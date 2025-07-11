@@ -3,7 +3,7 @@ const { google } = require('googleapis');
 const fs = require('fs').promises;
 const path = require('path');
 
-class GoogleWorkspaceTool extends Tool {
+class GoogleWorkspace extends Tool {
   constructor(fields = {}) {
     super();
     this.name = 'google_workspace';
@@ -347,4 +347,4 @@ class GoogleWorkspaceTool extends Tool {
   }
 }
 
-module.exports = GoogleWorkspaceTool;
+module.exports = GoogleWorkspace;
