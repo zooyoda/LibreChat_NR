@@ -161,6 +161,7 @@ const loadTools = async ({
     traversaal_search: TraversaalSearch,
     tavily_search_results_json: TavilySearchResults,
     wordpress_jwt_api: WordPressJWTAPI,
+    google_workspace: GoogleWorkspace,
   };
 
   const customConstructors = {
