@@ -46,6 +46,5 @@ module.exports = {
   createOpenAIImageTools,
   // ... другие инструменты
   WordPressJWTAPI,
-  GoogleWorkspace,
   google_workspace: GoogleWorkspace,
 };
