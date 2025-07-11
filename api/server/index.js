@@ -91,11 +91,23 @@ const startServer = async () => {
     await configureSocialLogins(app);
   }
 
-  // ✅ ДОБАВЛЕНО: OAuth callback роутер для Google Workspace MCP
-  // Должен быть подключен БЕЗ префикса /api
-  app.use('/', routes.oauthCallbackRouter);
+  // ✅ ИСПРАВЛЕНО: Google Workspace OAuth callback маршруты
+  // Подключаем Google Workspace OAuth маршруты БЕЗ префикса /api
+  if (routes.googleWorkspaceOauth) {
+    app.use('/', routes.googleWorkspaceOauth);
+    logger.info('Google Workspace OAuth routes mounted successfully');
+  } else {
+    logger.warn('Google Workspace OAuth routes not found in routes module');
+  }
+
+  // ✅ ИСПРАВЛЕНО: Проверяем существование oauthCallbackRouter
+  if (routes.oauthCallbackRouter) {
+    app.use('/', routes.oauthCallbackRouter);
+    logger.info('OAuth callback router mounted successfully');
+  }
 
   app.use('/oauth', routes.oauth);
+  
   /* API Endpoints */
   app.use('/api/auth', routes.auth);
   app.use('/api/actions', routes.actions);
@@ -127,6 +139,16 @@ const startServer = async () => {
   app.use('/api/tags', routes.tags);
   app.use('/api/mcp', routes.mcp);
 
+  // ✅ ДОБАВЛЕНО: Отладочный маршрут для проверки OAuth конфигурации
+  app.get('/api/debug/oauth-config', (req, res) => {
+    res.json({
+      googleWorkspaceOauth: !!routes.googleWorkspaceOauth,
+      oauthCallbackRouter: !!routes.oauthCallbackRouter,
+      allowSocialLogin: !!ALLOW_SOCIAL_LOGIN,
+      timestamp: new Date().toISOString()
+    });
+  });
+
   app.use((req, res) => {
     res.set({
       'Cache-Control': process.env.INDEX_CACHE_CONTROL || 'no-cache, no-store, must-revalidate',
@@ -149,6 +171,12 @@ const startServer = async () => {
     } else {
       logger.info(`Server listening at http://${host == '0.0.0.0' ? 'localhost' : host}:${port}`);
     }
+
+    // ✅ ДОБАВЛЕНО: Логирование OAuth маршрутов при старте
+    logger.info('OAuth routes configuration:');
+    logger.info(`- Google Workspace OAuth: ${routes.googleWorkspaceOauth ? 'enabled' : 'disabled'}`);
+    logger.info(`- OAuth Callback Router: ${routes.oauthCallbackRouter ? 'enabled' : 'disabled'}`);
+    logger.info(`- Social Login: ${ALLOW_SOCIAL_LOGIN ? 'enabled' : 'disabled'}`);
 
     initializeMCP(app);
   });
@@ -187,6 +215,13 @@ process.on('uncaughtException', (err) => {
     logger.error(
       '\n\nAn Uncaught `OpenAIError` error may be due to your reverse-proxy setup or stream configuration, or a bug in the `openai` node package.',
     );
+    return;
+  }
+
+  // ✅ ДОБАВЛЕНО: Специальная обработка Google Workspace OAuth ошибок
+  if (err.message.includes('GoogleWorkspace') || err.message.includes('google-workspace')) {
+    logger.error('Google Workspace OAuth Error:', err.message);
+    logger.warn('Google Workspace functionality may be limited until the issue is resolved');
     return;
   }
 
