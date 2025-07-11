@@ -13,6 +13,7 @@ const TraversaalSearch = require('./structured/TraversaalSearch');
 const createOpenAIImageTools = require('./structured/OpenAIImageTools');
 const TavilySearchResults = require('./structured/TavilySearchResults');
 const WordPressJWTAPI = require('./structured/WordPressJWTAPI');
+const GoogleWorkspace = require('./GoogleWorkspace');
 
 /** @type {Record<string, TPlugin | undefined>} */
 const manifestToolMap = {};
@@ -45,4 +46,6 @@ module.exports = {
   createOpenAIImageTools,
   // ... другие инструменты
   WordPressJWTAPI,
+  GoogleWorkspace,
+  google_workspace: GoogleWorkspace,
 };
