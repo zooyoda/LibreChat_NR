@@ -19,41 +19,45 @@ class GoogleWorkspace extends Tool {
     - "list files in Marketing folder"
     - "create calendar event for Monday 2pm team meeting"`;
     
-    // Инициализация как в WordPress JWT API
+    // ✅ ИСПРАВЛЕНО: Сохраняем ключи, но НЕ создаем OAuth2Client сразу
     this.clientId = fields.GOOGLE_CLIENT_ID;
     this.clientSecret = fields.GOOGLE_CLIENT_SECRET;
     this.tokenPath = path.join(process.cwd(), 'workspace_tokens.json');
+    this.redirectUri = 'https://nrlibre-neuralrunner.amvera.io/oauth/google/workspace/callback';
     
-    // Проверка наличия credentials
-    if (!this.clientId || !this.clientSecret) {
-      console.warn('Google Workspace: Missing OAuth credentials');
-      return;
+    // ✅ OAuth2Client будет создан только при наличии реальных ключей
+    this.oauth2Client = null;
+  }
+
+  // ✅ НОВЫЙ МЕТОД: Ленивая инициализация OAuth2Client
+  getOAuth2Client() {
+    if (!this.oauth2Client && this.clientId && this.clientSecret) {
+      // Проверяем, что это не placeholder значения
+      if (this.clientId !== 'user_provided' && this.clientSecret !== 'user_provided') {
+        this.oauth2Client = new google.auth.OAuth2(
+          this.clientId,
+          this.clientSecret,
+          this.redirectUri
+        );
+      }
     }
-    
-    this.oauth2Client = new google.auth.OAuth2(
-      this.clientId,
-      this.clientSecret,
-      `${process.env.DOMAIN_CLIENT}/oauth/google/workspace/callback`
-    );
+    return this.oauth2Client;
   }
 
   async _call(input) {
     try {
-      // Проверяем наличие OAuth credentials (как в WordPress JWT API)
-      if (!this.clientId || !this.clientSecret) {
+      // ✅ ИСПРАВЛЕНО: Проверяем реальные ключи, а не placeholder
+      if (!this.clientId || !this.clientSecret || 
+          this.clientId === 'user_provided' || this.clientSecret === 'user_provided') {
         return this.generateCredentialsInstructions();
       }
 
-      // Проверяем авторизацию пользователя
       const authStatus = await this.checkAuthStatus();
       if (!authStatus.authorized) {
         return this.generateAuthInstructions();
       }
 
-      // Парсим запрос пользователя
       const command = this.parseInput(input);
-      
-      // Выполняем операцию
       return await this.executeCommand(command);
       
     } catch (error) {
@@ -86,32 +90,45 @@ Please configure your OAuth credentials:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com)
 2. Create OAuth 2.0 credentials (Web Application)
-3. Add redirect URI: \`${process.env.DOMAIN_CLIENT}/oauth/google/workspace/callback\`
+3. Add redirect URI: \`${this.redirectUri}\`
 4. Enter your credentials in the plugin settings
 
 **Required scopes:**
 - Gmail (read/send)
 - Drive (file management)
 - Calendar (event management)
-- Contacts (read access)`;
+- Contacts (read access)
+
+**Current status**: Waiting for valid OAuth credentials to be provided.`;
   }
 
   generateAuthInstructions() {
-    if (!this.oauth2Client) {
+    // ✅ ИСПРАВЛЕНО: Используем ленивую инициализацию
+    const oauth2Client = this.getOAuth2Client();
+    
+    if (!oauth2Client) {
       return this.generateCredentialsInstructions();
     }
 
-    const authUrl = this.oauth2Client.generateAuthUrl({
+    const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
+      prompt: 'consent',
       scope: [
         'https://www.googleapis.com/auth/gmail.readonly',
         'https://www.googleapis.com/auth/gmail.send',
         'https://www.googleapis.com/auth/gmail.modify',
         'https://www.googleapis.com/auth/drive',
         'https://www.googleapis.com/auth/calendar',
-        'https://www.googleapis.com/auth/contacts.readonly'
+        'https://www.googleapis.com/auth/contacts.readonly',
+        'https://www.googleapis.com/auth/userinfo.email',
+        'https://www.googleapis.com/auth/userinfo.profile'
       ]
     });
+
+    // ✅ ДОБАВЛЕНО: Отладочная информация с реальными значениями
+    console.log('✅ Generated OAuth URL with real credentials');
+    console.log('Client ID (first 10 chars):', this.clientId?.substring(0, 10) + '...');
+    console.log('Redirect URI:', this.redirectUri);
 
     return `🔐 **Google Workspace Authorization Required**
 
@@ -128,10 +145,10 @@ After authorization, you'll be able to:
 Simply click the link above and grant the necessary permissions.`;
   }
 
+  // Остальные методы остаются без изменений...
   parseInput(input) {
     const lowerInput = input.toLowerCase();
     
-    // Gmail operations
     if (lowerInput.includes('email') || lowerInput.includes('gmail')) {
       if (lowerInput.includes('send')) {
         return { action: 'gmail_send', query: input };
@@ -141,7 +158,6 @@ Simply click the link above and grant the necessary permissions.`;
       return { action: 'gmail_list', query: input };
     }
     
-    // Drive operations  
     if (lowerInput.includes('drive') || lowerInput.includes('file')) {
       if (lowerInput.includes('upload')) {
         return { action: 'drive_upload', query: input };
@@ -151,7 +167,6 @@ Simply click the link above and grant the necessary permissions.`;
       return { action: 'drive_list', query: input };
     }
     
-    // Calendar operations
     if (lowerInput.includes('calendar') || lowerInput.includes('meeting') || lowerInput.includes('event')) {
       if (lowerInput.includes('create') || lowerInput.includes('schedule')) {
         return { action: 'calendar_create', query: input };
@@ -159,19 +174,14 @@ Simply click the link above and grant the necessary permissions.`;
       return { action: 'calendar_list', query: input };
     }
     
-    // Contacts operations
     if (lowerInput.includes('contact')) {
       return { action: 'contacts_list', query: input };
     }
     
-    // Default to Gmail search
     return { action: 'gmail_search', query: input };
   }
 
   async executeCommand(command) {
-    // На данном этапе возвращаем информативные сообщения
-    // В будущем здесь будет полная интеграция с Google APIs
-    
     switch (command.action) {
       case 'gmail_search':
         return `🔍 **Gmail Search Initiated**\n\nSearching for: "${command.query}"\n\n⚠️ **Integration Status**: Google Workspace tools are configured and ready. Full API integration is being finalized to provide complete Gmail search functionality.`;
