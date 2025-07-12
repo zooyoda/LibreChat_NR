@@ -19,44 +19,77 @@ class GoogleWorkspace extends Tool {
     - "list files in Marketing folder"
     - "create calendar event for Monday 2pm team meeting"`;
     
-    // ✅ ИСПРАВЛЕНО: Сохраняем ключи, но НЕ создаем OAuth2Client сразу
+    // ✅ ИСПРАВЛЕНО: Правильное получение credentials из fields
     this.clientId = fields.GOOGLE_CLIENT_ID;
     this.clientSecret = fields.GOOGLE_CLIENT_SECRET;
     this.tokenPath = path.join(process.cwd(), 'workspace_tokens.json');
     this.redirectUri = 'https://nrlibre-neuralrunner.amvera.io/oauth/google/workspace/callback';
     
-    // ✅ OAuth2Client будет создан только при наличии реальных ключей
+    // ✅ ДОБАВЛЕНО: Отладочное логирование
+    console.log('GoogleWorkspace constructor called with fields:', {
+      hasClientId: !!this.clientId,
+      hasClientSecret: !!this.clientSecret,
+      clientIdStart: this.clientId ? this.clientId.substring(0, 10) + '...' : 'undefined',
+      fieldsKeys: Object.keys(fields)
+    });
+    
+    // ✅ OAuth2Client создается только при наличии валидных ключей
     this.oauth2Client = null;
   }
 
   // ✅ НОВЫЙ МЕТОД: Ленивая инициализация OAuth2Client
   getOAuth2Client() {
-    if (!this.oauth2Client && this.clientId && this.clientSecret) {
-      // Проверяем, что это не placeholder значения
-      if (this.clientId !== 'user_provided' && this.clientSecret !== 'user_provided') {
-        this.oauth2Client = new google.auth.OAuth2(
-          this.clientId,
-          this.clientSecret,
-          this.redirectUri
-        );
-      }
+    if (!this.oauth2Client && this.hasValidCredentials()) {
+      console.log('Creating OAuth2Client with credentials');
+      this.oauth2Client = new google.auth.OAuth2(
+        this.clientId,
+        this.clientSecret,
+        this.redirectUri
+      );
     }
     return this.oauth2Client;
   }
 
+  // ✅ НОВЫЙ МЕТОД: Проверка валидности credentials
+  hasValidCredentials() {
+    const isValid = !!(
+      this.clientId && 
+      this.clientSecret && 
+      this.clientId !== 'user_provided' && 
+      this.clientSecret !== 'user_provided' &&
+      this.clientId.length > 10 &&
+      this.clientSecret.length > 10
+    );
+    
+    console.log('Credentials validation:', {
+      hasClientId: !!this.clientId,
+      hasClientSecret: !!this.clientSecret,
+      clientIdValid: this.clientId && this.clientId !== 'user_provided' && this.clientId.length > 10,
+      clientSecretValid: this.clientSecret && this.clientSecret !== 'user_provided' && this.clientSecret.length > 10,
+      isValid
+    });
+    
+    return isValid;
+  }
+
   async _call(input) {
     try {
-      // ✅ ИСПРАВЛЕНО: Проверяем реальные ключи, а не placeholder
-      if (!this.clientId || !this.clientSecret || 
-          this.clientId === 'user_provided' || this.clientSecret === 'user_provided') {
+      console.log('GoogleWorkspace _call method called with:', input);
+      
+      // ✅ ИСПРАВЛЕНО: Используем новый метод проверки
+      if (!this.hasValidCredentials()) {
+        console.log('Invalid credentials detected, showing configuration instructions');
         return this.generateCredentialsInstructions();
       }
 
+      // Проверяем авторизацию пользователя
       const authStatus = await this.checkAuthStatus();
       if (!authStatus.authorized) {
+        console.log('User not authorized, showing auth instructions');
         return this.generateAuthInstructions();
       }
 
+      // Парсим запрос пользователя
       const command = this.parseInput(input);
       return await this.executeCommand(command);
       
@@ -84,26 +117,31 @@ class GoogleWorkspace extends Tool {
   }
 
   generateCredentialsInstructions() {
-    return `🔧 **Google Workspace Configuration Required**
+    return `🔧 **Google Workspace Configuration Status**
 
-Please configure your OAuth credentials:
+**Current credentials check:**
+- Client ID: ${this.clientId ? '✅ Provided' : '❌ Missing'}
+- Client Secret: ${this.clientSecret ? '✅ Provided' : '❌ Missing'}
+
+${!this.hasValidCredentials() ? `
+**Issue detected:** ${!this.clientId ? 'Missing Client ID. ' : ''}${!this.clientSecret ? 'Missing Client Secret. ' : ''}${this.clientId === 'user_provided' || this.clientSecret === 'user_provided' ? 'Placeholder values detected. ' : ''}
+
+**To configure Google Workspace:**
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com)
 2. Create OAuth 2.0 credentials (Web Application)
 3. Add redirect URI: \`${this.redirectUri}\`
-4. Enter your credentials in the plugin settings
+4. Enter your real credentials in the plugin settings (not placeholder values)
 
 **Required scopes:**
 - Gmail (read/send)
 - Drive (file management)
 - Calendar (event management)
 - Contacts (read access)
-
-**Current status**: Waiting for valid OAuth credentials to be provided.`;
+` : '✅ Credentials appear to be configured correctly.'}`;
   }
 
   generateAuthInstructions() {
-    // ✅ ИСПРАВЛЕНО: Используем ленивую инициализацию
     const oauth2Client = this.getOAuth2Client();
     
     if (!oauth2Client) {
@@ -125,14 +163,13 @@ Please configure your OAuth credentials:
       ]
     });
 
-    // ✅ ДОБАВЛЕНО: Отладочная информация с реальными значениями
     console.log('✅ Generated OAuth URL with real credentials');
-    console.log('Client ID (first 10 chars):', this.clientId?.substring(0, 10) + '...');
-    console.log('Redirect URI:', this.redirectUri);
 
     return `🔐 **Google Workspace Authorization Required**
 
-To use Google Workspace tools, please authorize access:
+✅ **OAuth credentials configured successfully!**
+
+To complete setup, please authorize access:
 
 **[Click here to authorize Google Workspace](${authUrl})**
 
@@ -145,7 +182,6 @@ After authorization, you'll be able to:
 Simply click the link above and grant the necessary permissions.`;
   }
 
-  // Остальные методы остаются без изменений...
   parseInput(input) {
     const lowerInput = input.toLowerCase();
     
