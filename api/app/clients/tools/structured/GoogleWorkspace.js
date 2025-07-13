@@ -221,31 +221,39 @@ ${!this.clientId || !this.clientSecret ? `
 ` : '✅ **Credentials configured correctly!** Ready for OAuth authorization.'}`;
   }
 
-  async generateAuthInstructions() {
-    const oauth2Client = await this.getOAuth2Client();
-    
-    if (!oauth2Client) {
-      return this.generateCredentialsInstructions();
-    }
+ async generateAuthInstructions() {
+  const oauth2Client = await this.getOAuth2Client();
+  
+  if (!oauth2Client) {
+    return this.generateCredentialsInstructions();
+  }
 
-    const authUrl = oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      prompt: 'consent',
-      scope: [
-        'https://www.googleapis.com/auth/gmail.readonly',
-        'https://www.googleapis.com/auth/gmail.send',
-        'https://www.googleapis.com/auth/gmail.modify',
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/calendar',
-        'https://www.googleapis.com/auth/contacts.readonly',
-        'https://www.googleapis.com/auth/userinfo.email',
-        'https://www.googleapis.com/auth/userinfo.profile'
-      ]
-    });
+  // ✅ ИСПРАВЛЕНО: Передача userId через state параметр
+  const stateData = {
+    userId: this.userId,
+    timestamp: Date.now(),
+    source: 'google_workspace_plugin'
+  };
+  
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    state: Buffer.from(JSON.stringify(stateData)).toString('base64'), // ✅ Кодируем userId в state
+    scope: [
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/gmail.modify',
+      'https://www.googleapis.com/auth/drive',
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/contacts.readonly',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile'
+    ]
+  });
 
-    console.log('✅ Generated OAuth URL with database credentials');
+  console.log('✅ Generated OAuth URL with state parameter (userId)');
 
-    return `🔐 **Google Workspace Authorization Required**
+  return `🔐 **Google Workspace Authorization Required**
 
 ✅ **OAuth credentials loaded from database successfully!**
 
@@ -266,7 +274,7 @@ To complete setup, please authorize access:
 👥 **Contacts** - Contact retrieval and management
 
 **Security Note:** LibreChat will only access data you explicitly authorize and only when using Google Workspace tools.`;
-  }
+}
 
   parseInput(input) {
     const lowerInput = input.toLowerCase();
