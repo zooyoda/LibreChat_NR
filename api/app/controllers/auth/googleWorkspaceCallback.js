@@ -2,21 +2,20 @@ const { google } = require('googleapis');
 const fs = require('fs').promises;
 const path = require('path');
 const { logger } = require('@librechat/data-schemas');
+const { getUserPluginAuthValue } = require('~/server/services/PluginService');
 
 const handleGoogleWorkspaceCallback = async (req, res) => {
   try {
     const { code, error, state } = req.query;
     
-    // ✅ ДОБАВЛЕНО: Расширенное логирование для отладки
     logger.info('Google Workspace OAuth callback received:', { 
       hasCode: !!code, 
       error, 
       state,
-      userAgent: req.headers['user-agent'],
-      referer: req.headers.referer
+      userId: req.user?.id,
+      userAgent: req.headers['user-agent']
     });
     
-    // ✅ УЛУЧШЕНО: Детальная обработка OAuth ошибок
     if (error) {
       logger.error('Google Workspace OAuth error from Google:', error);
       return res.status(400).send(`
@@ -58,21 +57,6 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
               margin-top: 20px;
               line-height: 1.6;
             }
-            .retry-btn {
-              background: #fff;
-              color: #ee5a24;
-              border: none;
-              padding: 12px 24px;
-              border-radius: 6px;
-              font-size: 16px;
-              cursor: pointer;
-              margin-top: 20px;
-              transition: all 0.3s;
-            }
-            .retry-btn:hover {
-              background: #f0f0f0;
-              transform: translateY(-2px);
-            }
           </style>
         </head>
         <body>
@@ -83,7 +67,6 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
               This error occurred during Google Workspace authorization.<br>
               Please try again or check your OAuth configuration.
             </div>
-            <button class="retry-btn" onclick="window.close()">Close Window</button>
           </div>
         </body>
         </html>
@@ -98,34 +81,70 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
       });
     }
 
-    // ✅ ИСПРАВЛЕНО: Статический redirect URI для избежания ошибки invalid_client
+    // ✅ ИСПРАВЛЕНО: Получение user ID из сессии
+    const userId = req.user?.id;
+    if (!userId) {
+      logger.error('Google Workspace OAuth: User not authenticated');
+      return res.status(401).json({ 
+        error: 'User not authenticated',
+        details: 'Please log in to LibreChat first' 
+      });
+    }
+
     const redirectUri = 'https://nrlibre-neuralrunner.amvera.io/oauth/google/workspace/callback';
     
-    // ✅ УЛУЧШЕНО: Получение credentials с fallback на переменные окружения
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    // ✅ ИСПРАВЛЕНО: Получение credentials из БД пользователя
+    let clientId, clientSecret;
+    
+    try {
+      logger.info('Loading Google Workspace credentials from database for user:', userId);
+      
+      // Получаем ключи из БД через LibreChat API
+      clientId = await getUserPluginAuthValue(userId, 'GOOGLE_CLIENT_ID');
+      clientSecret = await getUserPluginAuthValue(userId, 'GOOGLE_CLIENT_SECRET');
+      
+      logger.info('Database credentials loaded:', {
+        hasClientId: !!clientId,
+        hasClientSecret: !!clientSecret,
+        clientIdLength: clientId ? clientId.length : 0
+      });
+      
+    } catch (dbError) {
+      logger.warn('Could not load credentials from database:', dbError.message);
+      
+      // ✅ Fallback на переменные окружения
+      clientId = process.env.GOOGLE_CLIENT_ID;
+      clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+      
+      logger.info('Using fallback environment credentials:', {
+        hasClientId: !!clientId,
+        hasClientSecret: !!clientSecret,
+        source: 'environment_variables'
+      });
+    }
     
     if (!clientId || !clientSecret) {
       logger.error('Google Workspace OAuth: Missing client credentials');
       return res.status(500).json({ 
         error: 'OAuth configuration error',
-        details: 'Missing Google client credentials in environment variables' 
+        details: 'Missing Google client credentials in database and environment variables' 
       });
     }
 
-    // ✅ ДОБАВЛЕНО: Проверка валидности credentials
+    // Проверка на placeholder значения
     if (clientId === 'user_provided' || clientSecret === 'user_provided') {
-      logger.error('Google Workspace OAuth: Invalid placeholder credentials');
+      logger.error('Google Workspace OAuth: Placeholder credentials detected');
       return res.status(500).json({ 
         error: 'OAuth configuration error',
-        details: 'Placeholder credentials detected. Please configure real OAuth credentials.' 
+        details: 'Placeholder credentials detected. Please configure real OAuth credentials in plugin settings.' 
       });
     }
 
     logger.info('Creating OAuth2 client with:', {
       clientId: clientId.substring(0, 20) + '...',
       redirectUri,
-      hasClientSecret: !!clientSecret
+      hasClientSecret: !!clientSecret,
+      credentialsSource: clientId === process.env.GOOGLE_CLIENT_ID ? 'environment' : 'database'
     });
 
     const oauth2Client = new google.auth.OAuth2(
@@ -136,7 +155,6 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
     
     logger.info('Exchanging authorization code for tokens...');
     
-    // ✅ УЛУЧШЕНО: Обмен кода на токены с обработкой ошибок
     const { tokens } = await oauth2Client.getToken(code);
     
     if (!tokens.access_token) {
@@ -145,7 +163,7 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
 
     logger.info('Tokens received successfully, fetching user information...');
 
-    // ✅ ДОБАВЛЕНО: Получение информации о пользователе
+    // Получение информации о пользователе
     oauth2Client.setCredentials(tokens);
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const userInfo = await oauth2.userinfo.get();
@@ -154,27 +172,34 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
     const userName = userInfo.data.name;
     const userPicture = userInfo.data.picture;
     
-    logger.info(`Google Workspace OAuth successful for user: ${userEmail}`);
+    logger.info(`Google Workspace OAuth successful for LibreChat user ${userId}, Google user: ${userEmail}`);
 
-    // ✅ УЛУЧШЕНО: Создание структурированных токенов с метаданными
+    // ✅ УЛУЧШЕНО: Структурированные токены с пользовательскими метаданными
     const tokenData = {
+      // OAuth токены
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       scope: tokens.scope,
       token_type: tokens.token_type,
       expiry_date: tokens.expiry_date,
-      // Пользовательские данные
-      user_email: userEmail,
-      user_name: userName,
-      user_picture: userPicture,
-      user_id: userInfo.data.id,
+      
+      // Информация о Google пользователе
+      google_user_email: userEmail,
+      google_user_name: userName,
+      google_user_picture: userPicture,
+      google_user_id: userInfo.data.id,
+      
+      // Информация о LibreChat пользователе
+      librechat_user_id: userId,
+      
       // Метаданные
       created_at: new Date().toISOString(),
       domain: req.get('host'),
-      user_agent: req.headers['user-agent']
+      user_agent: req.headers['user-agent'],
+      credentials_source: clientId === process.env.GOOGLE_CLIENT_ID ? 'environment' : 'database'
     };
 
-    // ✅ ДОБАВЛЕНО: Создание директории для токенов
+    // Создание директории для токенов
     const tokensDir = path.join(process.cwd(), 'workspace_tokens');
     try {
       await fs.mkdir(tokensDir, { recursive: true });
@@ -183,9 +208,9 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
       logger.warn('Could not create tokens directory:', error.message);
     }
 
-    // ✅ УЛУЧШЕНО: Сохранение токенов с персонализацией
+    // ✅ УЛУЧШЕНО: Персонализированное сохранение токенов
     const mainTokenPath = path.join(process.cwd(), 'workspace_tokens.json');
-    const userTokenPath = path.join(tokensDir, `${userEmail.replace('@', '_at_').replace(/[^a-zA-Z0-9_]/g, '_')}.json`);
+    const userTokenPath = path.join(tokensDir, `user_${userId}_${userEmail.replace('@', '_at_').replace(/[^a-zA-Z0-9_]/g, '_')}.json`);
     
     // Сохраняем основной файл токенов (для совместимости)
     await fs.writeFile(mainTokenPath, JSON.stringify(tokenData, null, 2));
@@ -193,9 +218,9 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
     // Сохраняем персональный файл пользователя
     await fs.writeFile(userTokenPath, JSON.stringify(tokenData, null, 2));
     
-    logger.info(`Google Workspace tokens saved for ${userEmail} in both main and user-specific files`);
+    logger.info(`Google Workspace tokens saved for LibreChat user ${userId} (${userEmail}) in both main and user-specific files`);
 
-    // ✅ УЛУЧШЕНО: Красивая страница успеха с информацией о пользователе
+    // Успешная страница с информацией о пользователе
     res.send(`
       <!DOCTYPE html>
       <html>
@@ -256,6 +281,13 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
             font-size: 16px;
             opacity: 0.8;
           }
+          .integration-info {
+            background: rgba(76, 175, 80, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border: 1px solid rgba(76, 175, 80, 0.3);
+          }
           .info { 
             color: #f0f0f0; 
             font-size: 18px; 
@@ -315,9 +347,14 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
             <div class="user-email">${userEmail}</div>
           </div>
           
+          <div class="integration-info">
+            <strong>🔗 Database Integration Active</strong><br>
+            <small>Credentials loaded from LibreChat database</small>
+          </div>
+          
           <div class="info">
             Your Google Workspace account has been successfully connected to LibreChat.<br>
-            You can now use all Google Workspace tools!
+            All tools are now ready to use!
           </div>
           
           <div class="features">
@@ -360,7 +397,6 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
             }
           }, 1000);
           
-          // Также закрываем окно при нажатии Escape
           document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
               window.close();
@@ -375,10 +411,10 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
     logger.error('Google Workspace OAuth callback error:', {
       message: error.message,
       stack: error.stack,
-      code: error.code
+      code: error.code,
+      userId: req.user?.id
     });
     
-    // ✅ УЛУЧШЕНО: Детальная страница ошибки
     res.status(500).send(`
       <!DOCTYPE html>
       <html>
@@ -434,7 +470,7 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
           <div class="error-code">${error.message}</div>
           <div class="details">
             Please try again or contact support if the problem persists.<br>
-            Make sure your OAuth credentials are properly configured.
+            Make sure your OAuth credentials are properly configured in LibreChat plugin settings.
           </div>
         </div>
       </body>
