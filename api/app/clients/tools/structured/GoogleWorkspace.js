@@ -6,6 +6,19 @@ const path = require('path');
 class GoogleWorkspace extends Tool {
   constructor(fields = {}) {
     super();
+
+    // ✅ РАСШИРЕННАЯ ОТЛАДКА
+  console.log('=== GOOGLE WORKSPACE FIELDS DEBUG ===');
+  console.log('All fields received:', JSON.stringify(fields, null, 2));
+  console.log('Fields keys:', Object.keys(fields));
+  console.log('GOOGLE_CLIENT_ID value:', fields.GOOGLE_CLIENT_ID);
+  console.log('GOOGLE_CLIENT_SECRET value:', fields.GOOGLE_CLIENT_SECRET);
+  console.log('Field types:', {
+    clientId: typeof fields.GOOGLE_CLIENT_ID,
+    clientSecret: typeof fields.GOOGLE_CLIENT_SECRET
+  });
+  console.log('=== END DEBUG ===');
+    
     this.name = 'google_workspace';
     this.description = `Comprehensive Google Workspace integration supporting:
     - Gmail: search, send emails, manage drafts, labels, attachments
