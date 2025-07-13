@@ -112,6 +112,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # Экспорт только основного порта приложения
 EXPOSE 3080
 
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0
+ENV GOOGLE_OAUTH_TIMEOUT=30000
+ENV HTTP_TIMEOUT=30000
+
 # Точка входа
 CMD echo "=== Starting LibreChat ===" && \
     echo "Environment: $NODE_ENV" && \
