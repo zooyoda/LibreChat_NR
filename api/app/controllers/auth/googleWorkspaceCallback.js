@@ -11,8 +11,8 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
     logger.info('Google Workspace OAuth callback received:', { 
       hasCode: !!code, 
       error, 
-      state,
-      userId: req.user?.id,
+      hasState: !!state,
+      reqUserExists: !!req.user,
       userAgent: req.headers['user-agent']
     });
     
@@ -51,19 +51,13 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
               margin-bottom: 20px;
               font-weight: bold;
             }
-            .details { 
-              color: #f0f0f0; 
-              font-size: 16px; 
-              margin-top: 20px;
-              line-height: 1.6;
-            }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="error">⚠️ Authorization Failed</div>
             <div>OAuth Error: ${error}</div>
-            <div class="details">
+            <div style="margin-top: 20px; color: #f0f0f0;">
               This error occurred during Google Workspace authorization.<br>
               Please try again or check your OAuth configuration.
             </div>
@@ -81,25 +75,84 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
       });
     }
 
-    // ✅ ИСПРАВЛЕНО: Получение user ID из сессии
-    const userId = req.user?.id;
+    // ✅ ИСПРАВЛЕНО: Получение userId из state параметра вместо req.user
+    let userId;
+    
+    if (state) {
+      try {
+        const stateData = JSON.parse(Buffer.from(state, 'base64').toString('utf8'));
+        userId = stateData.userId;
+        logger.info('UserId extracted from state parameter:', userId);
+      } catch (stateError) {
+        logger.error('Failed to parse state parameter:', stateError);
+      }
+    }
+    
+    // Fallback на req.user если state не сработал
+    if (!userId && req.user?.id) {
+      userId = req.user.id;
+      logger.info('UserId obtained from req.user:', userId);
+    }
+    
     if (!userId) {
-      logger.error('Google Workspace OAuth: User not authenticated');
-      return res.status(401).json({ 
-        error: 'User not authenticated',
-        details: 'Please log in to LibreChat first' 
-      });
+      logger.error('Google Workspace OAuth: No user ID available from state or session');
+      return res.status(401).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Google Workspace Authorization Error</title>
+          <meta charset="utf-8">
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              text-align: center; 
+              padding: 50px;
+              background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+              color: white;
+              margin: 0;
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .container {
+              background: rgba(255, 255, 255, 0.1);
+              padding: 40px;
+              border-radius: 15px;
+              backdrop-filter: blur(10px);
+              max-width: 500px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h2>❌ Session Lost</h2>
+            <p>Your LibreChat session was lost during OAuth authorization.</p>
+            <p><strong>Please:</strong></p>
+            <ol style="text-align: left; display: inline-block;">
+              <li>Return to LibreChat in your original tab</li>
+              <li>Make sure you're logged in</li>
+              <li>Try authorizing Google Workspace again</li>
+            </ol>
+            <p style="margin-top: 20px;">
+              <a href="/" style="color: #4CAF50; text-decoration: none; font-weight: bold;">
+                ← Return to LibreChat
+              </a>
+            </p>
+          </div>
+        </body>
+        </html>
+      `);
     }
 
     const redirectUri = 'https://nrlibre-neuralrunner.amvera.io/oauth/google/workspace/callback';
     
-    // ✅ ИСПРАВЛЕНО: Получение credentials из БД пользователя
+    // Получение credentials из БД пользователя
     let clientId, clientSecret;
     
     try {
       logger.info('Loading Google Workspace credentials from database for user:', userId);
       
-      // Получаем ключи из БД через LibreChat API
       clientId = await getUserPluginAuthValue(userId, 'GOOGLE_CLIENT_ID');
       clientSecret = await getUserPluginAuthValue(userId, 'GOOGLE_CLIENT_SECRET');
       
@@ -112,15 +165,11 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
     } catch (dbError) {
       logger.warn('Could not load credentials from database:', dbError.message);
       
-      // ✅ Fallback на переменные окружения
+      // Fallback на переменные окружения
       clientId = process.env.GOOGLE_CLIENT_ID;
       clientSecret = process.env.GOOGLE_CLIENT_SECRET;
       
-      logger.info('Using fallback environment credentials:', {
-        hasClientId: !!clientId,
-        hasClientSecret: !!clientSecret,
-        source: 'environment_variables'
-      });
+      logger.info('Using fallback environment credentials');
     }
     
     if (!clientId || !clientSecret) {
@@ -136,16 +185,11 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
       logger.error('Google Workspace OAuth: Placeholder credentials detected');
       return res.status(500).json({ 
         error: 'OAuth configuration error',
-        details: 'Placeholder credentials detected. Please configure real OAuth credentials in plugin settings.' 
+        details: 'Placeholder credentials detected. Please configure real OAuth credentials.' 
       });
     }
 
-    logger.info('Creating OAuth2 client with:', {
-      clientId: clientId.substring(0, 20) + '...',
-      redirectUri,
-      hasClientSecret: !!clientSecret,
-      credentialsSource: clientId === process.env.GOOGLE_CLIENT_ID ? 'environment' : 'database'
-    });
+    logger.info('Creating OAuth2 client with validated credentials');
 
     const oauth2Client = new google.auth.OAuth2(
       clientId,
@@ -174,7 +218,7 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
     
     logger.info(`Google Workspace OAuth successful for LibreChat user ${userId}, Google user: ${userEmail}`);
 
-    // ✅ УЛУЧШЕНО: Структурированные токены с пользовательскими метаданными
+    // Структурированные токены с пользовательскими метаданными
     const tokenData = {
       // OAuth токены
       access_token: tokens.access_token,
@@ -196,19 +240,18 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
       created_at: new Date().toISOString(),
       domain: req.get('host'),
       user_agent: req.headers['user-agent'],
-      credentials_source: clientId === process.env.GOOGLE_CLIENT_ID ? 'environment' : 'database'
+      auth_method: state ? 'state_parameter' : 'session_fallback'
     };
 
     // Создание директории для токенов
     const tokensDir = path.join(process.cwd(), 'workspace_tokens');
     try {
       await fs.mkdir(tokensDir, { recursive: true });
-      logger.info('Workspace tokens directory created/verified');
     } catch (error) {
       logger.warn('Could not create tokens directory:', error.message);
     }
 
-    // ✅ УЛУЧШЕНО: Персонализированное сохранение токенов
+    // Персонализированное сохранение токенов
     const mainTokenPath = path.join(process.cwd(), 'workspace_tokens.json');
     const userTokenPath = path.join(tokensDir, `user_${userId}_${userEmail.replace('@', '_at_').replace(/[^a-zA-Z0-9_]/g, '_')}.json`);
     
@@ -218,9 +261,9 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
     // Сохраняем персональный файл пользователя
     await fs.writeFile(userTokenPath, JSON.stringify(tokenData, null, 2));
     
-    logger.info(`Google Workspace tokens saved for LibreChat user ${userId} (${userEmail}) in both main and user-specific files`);
+    logger.info(`Google Workspace tokens saved for LibreChat user ${userId} (${userEmail})`);
 
-    // Успешная страница с информацией о пользователе
+    // Успешная страница с автозакрытием и переходом обратно в LibreChat
     res.send(`
       <!DOCTYPE html>
       <html>
@@ -272,27 +315,12 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
             border: 3px solid rgba(255, 255, 255, 0.3);
             display: ${userPicture ? 'block' : 'none'};
           }
-          .user-name {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 5px;
-          }
-          .user-email {
-            font-size: 16px;
-            opacity: 0.8;
-          }
           .integration-info {
             background: rgba(76, 175, 80, 0.2);
             padding: 15px;
             border-radius: 10px;
             margin: 20px 0;
             border: 1px solid rgba(76, 175, 80, 0.3);
-          }
-          .info { 
-            color: #f0f0f0; 
-            font-size: 18px; 
-            line-height: 1.8;
-            margin: 20px 0;
           }
           .features {
             text-align: left;
@@ -309,31 +337,37 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
             margin-right: 10px;
             font-size: 20px;
           }
-          .close-btn {
+          .action-buttons {
+            margin: 20px 0;
+          }
+          .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 5px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+          }
+          .btn-primary {
             background: linear-gradient(45deg, #4CAF50, #45a049);
             color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 8px;
-            font-size: 18px;
-            cursor: pointer;
-            margin-top: 25px;
-            transition: all 0.3s;
-            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
           }
-          .close-btn:hover {
+          .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+          }
+          .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
           }
           .countdown {
             font-size: 14px;
             opacity: 0.7;
             margin-top: 15px;
-          }
-          @media (max-width: 600px) {
-            .container { margin: 10px; padding: 30px 20px; }
-            .success { font-size: 28px; }
-            .info { font-size: 16px; }
           }
         </style>
       </head>
@@ -343,18 +377,17 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
           
           <div class="user-info">
             ${userPicture ? `<img src="${userPicture}" alt="User Avatar" class="user-avatar">` : ''}
-            <div class="user-name">${userName}</div>
-            <div class="user-email">${userEmail}</div>
+            <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">${userName}</div>
+            <div style="font-size: 16px; opacity: 0.8;">${userEmail}</div>
           </div>
           
           <div class="integration-info">
-            <strong>🔗 Database Integration Active</strong><br>
-            <small>Credentials loaded from LibreChat database</small>
+            <strong>🔗 Successfully Connected to LibreChat</strong><br>
+            <small>State-based authentication completed successfully</small>
           </div>
           
-          <div class="info">
-            Your Google Workspace account has been successfully connected to LibreChat.<br>
-            All tools are now ready to use!
+          <div style="color: #f0f0f0; font-size: 18px; line-height: 1.8; margin: 20px 0;">
+            Your Google Workspace account is now fully integrated with LibreChat!
           </div>
           
           <div class="features">
@@ -376,15 +409,18 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
             </div>
           </div>
           
-          <button class="close-btn" onclick="window.close()">Close Window</button>
+          <div class="action-buttons">
+            <a href="/" class="btn btn-primary">Return to LibreChat</a>
+            <button class="btn btn-secondary" onclick="window.close()">Close Window</button>
+          </div>
           
           <div class="countdown">
-            This window will close automatically in <span id="countdown">10</span> seconds
+            Redirecting to LibreChat in <span id="countdown">5</span> seconds
           </div>
         </div>
         
         <script>
-          let seconds = 10;
+          let seconds = 5;
           const countdownElement = document.getElementById('countdown');
           
           const timer = setInterval(() => {
@@ -393,10 +429,11 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
             
             if (seconds <= 0) {
               clearInterval(timer);
-              window.close();
+              window.location.href = '/';
             }
           }, 1000);
           
+          // Закрытие окна при Escape
           document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
               window.close();
@@ -411,8 +448,7 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
     logger.error('Google Workspace OAuth callback error:', {
       message: error.message,
       stack: error.stack,
-      code: error.code,
-      userId: req.user?.id
+      code: error.code
     });
     
     res.status(500).send(`
@@ -447,30 +483,15 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
             margin-bottom: 20px;
             font-weight: bold;
           }
-          .details { 
-            color: #f0f0f0; 
-            font-size: 16px; 
-            margin-top: 20px;
-            line-height: 1.6;
-          }
-          .error-code {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 15px;
-            border-radius: 8px;
-            font-family: monospace;
-            margin: 15px 0;
-            word-break: break-word;
-          }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="error">❌ Authentication Failed</div>
           <div>There was an error during Google Workspace authorization.</div>
-          <div class="error-code">${error.message}</div>
-          <div class="details">
-            Please try again or contact support if the problem persists.<br>
-            Make sure your OAuth credentials are properly configured in LibreChat plugin settings.
+          <div style="margin-top: 20px; color: #f0f0f0;">
+            Error: ${error.message}<br><br>
+            Please return to LibreChat and try again.
           </div>
         </div>
       </body>
