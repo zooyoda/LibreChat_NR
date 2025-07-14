@@ -407,6 +407,7 @@ function generateErrorPage(errorMessage, errorTitle = 'Authorization Error') {
             <li>Ensure you're logged into LibreChat</li>
             <li>Check your Google Workspace plugin configuration</li>
             <li>Verify your OAuth credentials in Google Cloud Console</li>
+            <li>Check network connectivity issues on the server</li>
           </ul>
         </div>
         
