@@ -139,6 +139,10 @@ const startServer = async () => {
   app.use('/api/tags', routes.tags);
   app.use('/api/mcp', routes.mcp);
 
+  // ✅ Диагностические маршруты
+  const debugRoutes = require('./routes/debug');
+  app.use('/api/debug', debugRoutes);
+
   // ✅ ДОБАВЛЕНО: Отладочный маршрут для проверки OAuth конфигурации
   app.get('/api/debug/oauth-config', (req, res) => {
     res.json({
