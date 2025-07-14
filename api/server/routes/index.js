@@ -28,6 +28,7 @@ const keys = require('./keys');
 const user = require('./user');
 const ask = require('./ask');
 const mcp = require('./mcp');
+const debug = require('./debug');
 
 // === GOOGLE WORKSPACE OAUTH INTEGRATION ===
 // Импорт модуля для обработки Google Workspace OAuth callbacks
@@ -64,6 +65,7 @@ module.exports = {
   categories,
   staticRoute,
   mcp,
+  debug,
   
   // === GOOGLE WORKSPACE OAUTH ROUTES ===
   // Экспорт модуля Google Workspace OAuth для использования в основном роутере
