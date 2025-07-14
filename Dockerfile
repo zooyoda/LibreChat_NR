@@ -2,7 +2,7 @@ FROM node:20.19-alpine
 
 WORKDIR /app
 
-# ✅ Расширенная установка системных зависимостей с поддержкой сети
+# Установка необходимых системных зависимостей
 RUN apk add --no-cache \
     bash \
     curl \
@@ -12,12 +12,7 @@ RUN apk add --no-cache \
     g++ \
     file \
     ca-certificates \
-    bind-tools \
     && rm -rf /var/cache/apk/*
-
-# ✅ Настройка DNS для лучшего соединения с Google APIs
-RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
 
 # Копируем package.json для всех подпроектов
 COPY package*.json ./
@@ -28,6 +23,7 @@ COPY mcp-telegram/package*.json ./mcp-telegram/
 COPY sequentialthinking-mcp/package*.json ./sequentialthinking-mcp/
 COPY mcp-context7/package*.json ./mcp-context7/
 COPY mcp-fetch/package*.json ./mcp-fetch/
+# Добавляем поддержку Google Workspace
 COPY mcp-google-workspace/package*.json ./mcp-google-workspace/
 
 # Копируем исходный код
@@ -83,12 +79,13 @@ RUN npm prune --omit=dev
 # Возвращаемся в корневой каталог
 WORKDIR /app
 
-# Финальная проверка всех MCP серверов (исключаем Google Workspace для плагинного подхода)
+# Финальная проверка всех MCP серверов
 RUN echo "=== Final MCP servers verification ===" \
     && ls -la sequentialthinking-mcp/dist/index.js \
     && ls -la mcp-context7/dist/index.js \
     && ls -la mcp-fetch/dist/index.js \
     && ls -la mcp-github-api/index.js \
+   # && ls -la mcp-google-workspace/dist/index.js \
     && echo "✅ All MCP servers verified"
 
 # Сборка основного приложения LibreChat
@@ -98,17 +95,12 @@ RUN npm run frontend \
 # Копирование конфигурации
 COPY librechat.yaml /app/librechat.yaml
 
-# ✅ Настройки для решения сетевых timeout'ов на Amvera
+# Установка переменных окружения для production
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
 ENV PORT=3080
 ENV WORKSPACE_BASE_PATH=/app/workspace
 ENV LOG_MODE=strict
-ENV NODE_TLS_REJECT_UNAUTHORIZED=0
-ENV GOOGLE_OAUTH_TIMEOUT=60000
-ENV HTTP_TIMEOUT=60000
-ENV HTTPS_TIMEOUT=60000
-ENV NODE_OPTIONS="--max-old-space-size=2048 --dns-result-order=ipv4first"
 
 # Создание финальной структуры директорий
 RUN mkdir -p /app/uploads /app/images /app/meilis_data
@@ -120,11 +112,14 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # Экспорт только основного порта приложения
 EXPOSE 3080
 
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0
+ENV GOOGLE_OAUTH_TIMEOUT=30000
+ENV HTTP_TIMEOUT=30000
+
 # Точка входа
 CMD echo "=== Starting LibreChat ===" && \
     echo "Environment: $NODE_ENV" && \
     echo "Host: $HOST" && \
     echo "Port: $PORT" && \
-    echo "Google OAuth Timeout: $GOOGLE_OAUTH_TIMEOUT" && \
     echo "Starting server..." && \
     node api/server/index.js
