@@ -2,7 +2,7 @@ FROM node:20.19-alpine
 
 WORKDIR /app
 
-# Установка необходимых системных зависимостей
+# Установка необходимых системных зависимостей с сетевыми утилитами
 RUN apk add --no-cache \
     bash \
     curl \
@@ -12,14 +12,22 @@ RUN apk add --no-cache \
     g++ \
     file \
     ca-certificates \
+    bind-tools \
+    iputils \
     && rm -rf /var/cache/apk/*
+
+# ✅ НАСТРОЙКА DNS ДЛЯ ЛУЧШЕГО СОЕДИНЕНИЯ С GOOGLE APIS
+RUN echo "nameserver 1.1.1.1" > /etc/resolv.conf && \
+    echo "nameserver 8.8.8.8" >> /etc/resolv.conf && \
+    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
 
 # ✅ СОЗДАНИЕ PERSISTENT ДИРЕКТОРИИ ДЛЯ ТОКЕНОВ
 RUN mkdir -p /data/workspace_tokens \
     && mkdir -p /data/uploads \
     && mkdir -p /data/images \
     && mkdir -p /data/logs \
-    && mkdir -p /data/meilis_data
+    && mkdir -p /data/meilis_data \
+    && mkdir -p /data/config
 
 # Копируем package.json для всех подпроектов
 COPY package*.json ./
@@ -49,8 +57,9 @@ USER node
 # Устанавливаем dev-зависимости для сборки всего проекта
 RUN npm ci --include=dev
 
-# Устанавливаем Google APIs в корневой проект
-RUN npm install googleapis google-auth-library
+# Устанавливаем Google APIs в корневой проект с retry логикой
+RUN npm install googleapis google-auth-library || \
+    (echo "Retrying googleapis installation..." && sleep 5 && npm install googleapis google-auth-library)
 
 # MCP-GITHUB-API
 WORKDIR /app/mcp-github-api
@@ -116,30 +125,56 @@ ENV GOOGLE_TOKENS_PATH=/data/workspace_tokens
 ENV UPLOADS_PATH=/data/uploads
 ENV IMAGES_PATH=/data/images
 ENV LOGS_PATH=/data/logs
+ENV CONFIG_PATH=/data/config
+
+# ✅ РАСШИРЕННЫЕ СЕТЕВЫЕ НАСТРОЙКИ ДЛЯ AMVERA
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0
+ENV GOOGLE_OAUTH_TIMEOUT=90000
+ENV HTTP_TIMEOUT=90000
+ENV HTTPS_TIMEOUT=90000
+ENV NODE_OPTIONS="--max-old-space-size=2048 --dns-result-order=ipv4first"
+
+# ✅ НАСТРОЙКИ ДЛЯ ОБХОДА PROXY ОГРАНИЧЕНИЙ
+ENV HTTP_PROXY=""
+ENV HTTPS_PROXY=""
+ENV NO_PROXY="localhost,127.0.0.1,oauth2.googleapis.com,*.googleapis.com"
+
+# ✅ CURL НАСТРОЙКИ ДЛЯ FALLBACK РЕШЕНИЯ
+ENV CURL_TIMEOUT=90
+ENV CURL_CONNECT_TIMEOUT=30
+ENV CURL_MAX_REDIRECTS=5
 
 # ✅ СОЗДАНИЕ СИМЛИНКОВ ДЛЯ ОБРАТНОЙ СОВМЕСТИМОСТИ
 RUN ln -sf /data/uploads /app/uploads \
     && ln -sf /data/images /app/images \
-    && ln -sf /data/workspace_tokens /app/workspace_tokens
+    && ln -sf /data/workspace_tokens /app/workspace_tokens \
+    && ln -sf /data/config /app/config_persistent
 
-# Проверка здоровья контейнера
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:3080/api/health || exit 1
+# ✅ ПРОВЕРКА СЕТЕВОГО ДОСТУПА ПРИ СБОРКЕ
+RUN echo "=== Network connectivity test ===" \
+    && curl -I --connect-timeout 10 --max-time 30 https://www.google.com || echo "Google unreachable during build" \
+    && curl -I --connect-timeout 10 --max-time 30 https://registry.npmjs.org || echo "NPM registry unreachable during build"
+
+# Проверка здоровья контейнера с улучшенной диагностикой
+HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 \
+    CMD curl -f http://localhost:3080/api/health || \
+        (echo "Health check failed" && curl -f http://localhost:3080/ || exit 1)
 
 # Экспорт только основного порта приложения
 EXPOSE 3080
 
-ENV NODE_TLS_REJECT_UNAUTHORIZED=0
-ENV GOOGLE_OAUTH_TIMEOUT=30000
-ENV HTTP_TIMEOUT=30000
-
-# ✅ ПРОВЕРКА PERSISTENT ДИРЕКТОРИЙ ПРИ СТАРТЕ
-CMD echo "=== Starting LibreChat ===" && \
+# ✅ УЛУЧШЕННАЯ ПРОВЕРКА PERSISTENT ДИРЕКТОРИЙ И СЕТЕВОЙ ДИАГНОСТИКИ ПРИ СТАРТЕ
+CMD echo "=== Starting LibreChat on Amvera ===" && \
     echo "Environment: $NODE_ENV" && \
     echo "Host: $HOST" && \
     echo "Port: $PORT" && \
     echo "Persistent data path: $PERSISTENT_DATA_PATH" && \
     echo "Google tokens path: $GOOGLE_TOKENS_PATH" && \
+    echo "Node options: $NODE_OPTIONS" && \
+    echo "=== Persistent storage check ===" && \
     ls -la /data/ && \
-    echo "Starting server..." && \
+    echo "=== Testing network connectivity ===" && \
+    (curl -I --connect-timeout 5 --max-time 10 https://www.google.com || echo "Google unreachable at startup") && \
+    (curl -I --connect-timeout 5 --max-time 10 https://oauth2.googleapis.com/token || echo "Google OAuth endpoint unreachable") && \
+    echo "=== Starting LibreChat server ===" && \
     node api/server/index.js
