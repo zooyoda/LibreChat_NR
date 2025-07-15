@@ -1,8 +1,134 @@
 const { google } = require('googleapis');
 const fs = require('fs').promises;
 const path = require('path');
+const { exec } = require('child_process');
+const util = require('util');
 const { logger } = require('@librechat/data-schemas');
 const { getUserPluginAuthValue } = require('~/server/services/PluginService');
+
+// ✅ НОВАЯ ФУНКЦИЯ: Обмен токенов через curl для обхода Amvera ограничений
+const execAsync = util.promisify(exec);
+
+async function exchangeTokensViaCurl(code, clientId, clientSecret, redirectUri) {
+  // Экранируем специальные символы для bash
+  const escapeShell = (str) => {
+    return `'${str.replace(/'/g, "'\\''")}'`;
+  };
+
+  const curlCommand = `curl -X POST 'https://oauth2.googleapis.com/token' \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -H 'User-Agent: LibreChat-Curl/1.0' \
+    -H 'Accept: application/json' \
+    -d grant_type=authorization_code \
+    -d code=${escapeShell(code)} \
+    -d client_id=${escapeShell(clientId)} \
+    -d client_secret=${escapeShell(clientSecret)} \
+    -d redirect_uri=${escapeShell(redirectUri)} \
+    --connect-timeout 30 \
+    --max-time 90 \
+    --retry 2 \
+    --retry-delay 3 \
+    --silent \
+    --show-error \
+    --fail-with-body`;
+    
+  try {
+    logger.info('Attempting token exchange via curl with parameters:', {
+      endpoint: 'https://oauth2.googleapis.com/token',
+      codeLength: code.length,
+      clientIdDomain: clientId.split('.')[0] + '...',
+      redirectUri: redirectUri.substring(0, 50) + '...',
+      command: 'curl with OAuth parameters'
+    });
+    
+    const startTime = Date.now();
+    const { stdout, stderr } = await execAsync(curlCommand);
+    const duration = Date.now() - startTime;
+    
+    if (stderr && stderr.trim()) {
+      logger.warn('Curl stderr output:', stderr);
+    }
+    
+    if (!stdout || stdout.trim() === '') {
+      throw new Error('Empty response from Google OAuth API via curl');
+    }
+    
+    let response;
+    try {
+      response = JSON.parse(stdout);
+    } catch (parseError) {
+      logger.error('Failed to parse curl response as JSON:', {
+        stdout: stdout.substring(0, 200),
+        parseError: parseError.message
+      });
+      throw new Error(`Invalid JSON response from curl: ${parseError.message}`);
+    }
+    
+    if (response.error) {
+      throw new Error(`Google OAuth error via curl: ${response.error_description || response.error}`);
+    }
+    
+    if (!response.access_token) {
+      throw new Error('No access_token in curl response from Google OAuth');
+    }
+    
+    logger.info(`Curl token exchange successful in ${duration}ms`, {
+      hasAccessToken: !!response.access_token,
+      hasRefreshToken: !!response.refresh_token,
+      tokenType: response.token_type,
+      scope: response.scope,
+      expiresIn: response.expires_in
+    });
+    
+    return response;
+    
+  } catch (error) {
+    logger.error('Curl exchange failed with details:', {
+      error: error.message,
+      code: error.code,
+      signal: error.signal,
+      cmd: error.cmd ? 'curl command failed' : 'unknown'
+    });
+    throw new Error(`Curl exchange failed: ${error.message}`);
+  }
+}
+
+// ✅ НОВАЯ ФУНКЦИЯ: Получение информации о пользователе через curl
+async function getUserInfoViaCurl(accessToken) {
+  const curlCommand = `curl -H 'Authorization: Bearer ${accessToken}' \
+    -H 'User-Agent: LibreChat-Curl/1.0' \
+    'https://www.googleapis.com/oauth2/v2/userinfo' \
+    --connect-timeout 30 \
+    --max-time 60 \
+    --silent \
+    --show-error \
+    --fail-with-body`;
+    
+  try {
+    logger.info('Fetching user info via curl...');
+    
+    const startTime = Date.now();
+    const { stdout, stderr } = await execAsync(curlCommand);
+    const duration = Date.now() - startTime;
+    
+    if (stderr && stderr.trim()) {
+      logger.warn('User info curl stderr:', stderr);
+    }
+    
+    const userInfo = JSON.parse(stdout);
+    
+    if (userInfo.error) {
+      throw new Error(`Google userinfo error: ${userInfo.error_description || userInfo.error}`);
+    }
+    
+    logger.info(`User info retrieved via curl in ${duration}ms`);
+    return userInfo;
+    
+  } catch (error) {
+    logger.error('Curl user info failed:', error.message);
+    throw new Error(`Failed to get user info via curl: ${error.message}`);
+  }
+}
 
 const handleGoogleWorkspaceCallback = async (req, res) => {
   try {
@@ -143,56 +269,105 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
       redirectUri
     );
     
-    logger.info('Exchanging authorization code for tokens...');
+    logger.info('Starting multi-method token exchange process...');
     
-    // ✅ ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ И ОБРАБОТКА ЗАПРОСА К GOOGLE API
+    // ✅ МНОЖЕСТВЕННАЯ СТРАТЕГИЯ ОБМЕНА ТОКЕНОВ
+    let tokens;
+    let userInfo;
+    let exchangeMethod = 'unknown';
+    let exchangeDuration = 0;
+    
     try {
+      // МЕТОД 1: Стандартный Google OAuth Client
+      logger.info('Attempting Method 1: Standard Google OAuth Client...');
       const tokenStartTime = Date.now();
       
-      // Логируем детали запроса перед отправкой
-      logger.info('Token exchange request details:', {
-        endpoint: 'https://oauth2.googleapis.com/token',
-        codeLength: code.length,
-        redirectUri,
-        clientIdDomain: clientId.split('@')[0] || clientId.split('.')[0],
-        timestamp: new Date().toISOString()
-      });
+      try {
+        const tokenResponse = await oauth2Client.getToken(code);
+        tokens = tokenResponse.tokens;
+        exchangeDuration = Date.now() - tokenStartTime;
+        exchangeMethod = 'standard';
+        
+        logger.info(`Standard OAuth exchange successful in ${exchangeDuration}ms`, {
+          hasAccessToken: !!tokens.access_token,
+          hasRefreshToken: !!tokens.refresh_token,
+          tokenType: tokens.token_type,
+          scope: tokens.scope
+        });
+        
+        // Получаем информацию о пользователе стандартным методом
+        oauth2Client.setCredentials(tokens);
+        const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+        const userInfoResponse = await oauth2.userinfo.get();
+        userInfo = userInfoResponse.data;
+        
+        logger.info('User info retrieved via standard method');
+        
+      } catch (standardError) {
+        logger.warn('Standard OAuth exchange failed, trying curl method:', {
+          error: standardError.message,
+          code: standardError.code,
+          name: standardError.name
+        });
+        
+        // МЕТОД 2: Curl для обмена токенов
+        logger.info('Attempting Method 2: Curl token exchange...');
+        const curlStartTime = Date.now();
+        
+        try {
+          const curlTokenResponse = await exchangeTokensViaCurl(code, clientId, clientSecret, redirectUri);
+          exchangeDuration = Date.now() - curlStartTime;
+          exchangeMethod = 'curl';
+          
+          // Преобразуем curl ответ в формат googleapis
+          tokens = {
+            access_token: curlTokenResponse.access_token,
+            refresh_token: curlTokenResponse.refresh_token,
+            scope: curlTokenResponse.scope,
+            token_type: curlTokenResponse.token_type || 'Bearer',
+            expiry_date: curlTokenResponse.expires_in ? 
+              Date.now() + (curlTokenResponse.expires_in * 1000) : null
+          };
+          
+          logger.info('Curl token exchange successful, fetching user info...');
+          
+          // Получаем информацию о пользователе через curl
+          userInfo = await getUserInfoViaCurl(tokens.access_token);
+          
+        } catch (curlError) {
+          logger.error('Both standard and curl methods failed:', {
+            standardError: standardError.message,
+            curlError: curlError.message
+          });
+          
+          // Пробуем показать специальную страницу с инструкциями
+          if (curlError.message.includes('timeout') || curlError.message.includes('Connection timed out')) {
+            return res.send(generateNetworkTimeoutPage(req.get('host')));
+          }
+          
+          throw new Error(`All token exchange methods failed. Standard: ${standardError.message}, Curl: ${curlError.message}`);
+        }
+      }
       
-      const { tokens } = await oauth2Client.getToken(code);
-      
-      const tokenEndTime = Date.now();
-      const exchangeDuration = tokenEndTime - tokenStartTime;
-      
-      logger.info(`Token exchange completed successfully in ${exchangeDuration}ms`, {
-        hasAccessToken: !!tokens.access_token,
-        hasRefreshToken: !!tokens.refresh_token,
-        tokenType: tokens.token_type,
-        scope: tokens.scope,
-        expiryDate: tokens.expiry_date
-      });
+      logger.info(`Token exchange completed successfully via ${exchangeMethod} method in ${exchangeDuration}ms`);
       
       if (!tokens.access_token) {
         throw new Error('Failed to obtain access token from Google OAuth response');
       }
 
-      logger.info('Tokens received successfully, fetching user information...');
+      if (!userInfo || !userInfo.email) {
+        throw new Error('Failed to obtain user information from Google API');
+      }
 
-      // ✅ ПОЛУЧЕНИЕ ИНФОРМАЦИИ О ПОЛЬЗОВАТЕЛЕ
-      oauth2Client.setCredentials(tokens);
-      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+      const userEmail = userInfo.email;
+      const userName = userInfo.name || userEmail.split('@')[0];
+      const userPicture = userInfo.picture;
+      const googleUserId = userInfo.id;
       
-      const userInfoStartTime = Date.now();
-      const userInfo = await oauth2.userinfo.get();
-      const userInfoEndTime = Date.now();
-      
-      logger.info(`User info retrieved in ${userInfoEndTime - userInfoStartTime}ms`);
-      
-      const userEmail = userInfo.data.email;
-      const userName = userInfo.data.name;
-      const userPicture = userInfo.data.picture;
-      const googleUserId = userInfo.data.id;
-      
-      logger.info(`Google Workspace OAuth successful for LibreChat user ${userId}, Google user: ${userEmail}`);
+      logger.info(`Google Workspace OAuth successful for LibreChat user ${userId}, Google user: ${userEmail}`, {
+        exchangeMethod,
+        exchangeDuration
+      });
 
       // ✅ СТРУКТУРИРОВАННЫЕ ТОКЕНЫ С МЕТАДАННЫМИ
       const tokenData = {
@@ -218,6 +393,7 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
         user_agent: req.headers['user-agent'],
         credentials_source: credentialsSource,
         auth_method: state ? 'state_parameter' : 'session_fallback',
+        exchange_method: exchangeMethod, // ✅ НОВОЕ: отслеживание метода обмена
         exchange_duration_ms: exchangeDuration,
         
         // State информация
@@ -248,28 +424,26 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
         mainTokenPath,
         userTokenPath,
         userEmail,
-        librechatUserId: userId
+        librechatUserId: userId,
+        exchangeMethod,
+        credentialsSource
       });
 
-      // ✅ УСПЕШНАЯ СТРАНИЦА С АВТОМАТИЧЕСКИМ РЕДИРЕКТОМ
-      return res.send(generateSuccessPage(userName, userEmail, userPicture, credentialsSource));
+      // ✅ УСПЕШНАЯ СТРАНИЦА С ИНФОРМАЦИЕЙ О МЕТОДЕ
+      return res.send(generateSuccessPage(userName, userEmail, userPicture, credentialsSource, exchangeMethod));
       
     } catch (tokenError) {
-      // ✅ ДЕТАЛЬНАЯ ОБРАБОТКА ОШИБОК ЗАПРОСА К GOOGLE API
-      logger.error('Token exchange failed with detailed error info:', {
+      // ✅ ДЕТАЛЬНАЯ ОБРАБОТКА ОШИБОК
+      logger.error('Token exchange process failed with detailed error info:', {
         error: tokenError.message,
         name: tokenError.name,
         code: tokenError.code,
         status: tokenError.status || tokenError.response?.status,
         statusText: tokenError.statusText || tokenError.response?.statusText,
         responseData: tokenError.response?.data,
-        stack: tokenError.stack?.split('\n').slice(0, 5), // Первые 5 строк стека
-        config: tokenError.config ? {
-          url: tokenError.config.url,
-          method: tokenError.config.method,
-          timeout: tokenError.config.timeout,
-          headers: tokenError.config.headers ? Object.keys(tokenError.config.headers) : undefined
-        } : undefined
+        stack: tokenError.stack?.split('\n').slice(0, 5),
+        exchangeMethod,
+        userId
       });
       
       // Специфические типы ошибок
@@ -303,7 +477,124 @@ const handleGoogleWorkspaceCallback = async (req, res) => {
   }
 };
 
-// ✅ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ГЕНЕРАЦИИ HTML СТРАНИЦ
+// ✅ НОВАЯ ФУНКЦИЯ: Страница для сетевых проблем
+function generateNetworkTimeoutPage(hostname) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Network Timeout - Google Workspace</title>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          text-align: center; 
+          padding: 20px;
+          background: linear-gradient(135deg, #ffa726 0%, #ff7043 100%);
+          color: white;
+          margin: 0;
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .container {
+          background: rgba(255, 255, 255, 0.1);
+          padding: 40px;
+          border-radius: 20px;
+          backdrop-filter: blur(15px);
+          max-width: 700px;
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        .title { 
+          font-size: 32px; 
+          margin-bottom: 20px; 
+          font-weight: bold; 
+        }
+        .section { 
+          background: rgba(255, 255, 255, 0.1); 
+          padding: 20px; 
+          border-radius: 10px; 
+          margin: 20px 0; 
+          text-align: left;
+        }
+        .section h3 {
+          color: #ffd93d;
+          margin-top: 0;
+        }
+        .btn {
+          display: inline-block;
+          padding: 12px 24px;
+          margin: 10px;
+          background: #4CAF50;
+          color: white;
+          text-decoration: none;
+          border-radius: 8px;
+          font-weight: bold;
+          transition: all 0.3s;
+        }
+        .btn:hover {
+          background: #45a049;
+          transform: translateY(-2px);
+        }
+        .diagnostic-link {
+          background: rgba(255, 255, 255, 0.2);
+          padding: 15px;
+          border-radius: 8px;
+          margin: 15px 0;
+        }
+        .diagnostic-link a {
+          color: #ffd93d;
+          text-decoration: none;
+          font-weight: bold;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="title">⏱️ Сетевые ограничения обнаружены</div>
+        
+        <div class="section">
+          <h3>🔍 Что произошло:</h3>
+          <p>Попытки подключения к Google OAuth API превышают лимит времени на сервере Amvera. Были протестированы как стандартный Node.js клиент, так и системный curl.</p>
+        </div>
+        
+        <div class="section">
+          <h3>🛠️ Возможные решения:</h3>
+          <ol>
+            <li><strong>Попробуйте снова через несколько минут</strong> - сетевые проблемы могут быть временными</li>
+            <li><strong>Проверьте диагностику</strong> - используйте ссылку ниже для анализа соединения</li>
+            <li><strong>Обратитесь в поддержку Amvera</strong> - возможно, нужны изменения в сетевой конфигурации</li>
+          </ol>
+        </div>
+        
+        <div class="diagnostic-link">
+          <h3>📋 Диагностика сети:</h3>
+          <a href="https://${hostname}/api/test/google-connectivity" target="_blank">
+            🔗 Тест подключения к Google API
+          </a>
+          <p style="font-size: 14px; margin-top: 10px;">
+            Откроется в новой вкладке с результатами тестирования сетевого доступа
+          </p>
+        </div>
+        
+        <div class="section">
+          <h3>🔧 Для администраторов:</h3>
+          <p>Рекомендуется обратиться в поддержку Amvera с запросом на разрешение исходящих HTTPS соединений к <code>oauth2.googleapis.com</code> и <code>www.googleapis.com</code></p>
+        </div>
+        
+        <div style="margin-top: 30px;">
+          <a href="/" class="btn">Вернуться в LibreChat</a>
+          <button class="btn" onclick="window.location.reload()" style="background: #2196F3;">Попробовать снова</button>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+// ✅ ОБНОВЛЕННЫЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 
 function generateErrorPage(errorMessage, errorTitle = 'Authorization Error') {
   return `
@@ -522,7 +813,14 @@ function generateSessionLostPage() {
   `;
 }
 
-function generateSuccessPage(userName, userEmail, userPicture, credentialsSource) {
+function generateSuccessPage(userName, userEmail, userPicture, credentialsSource, exchangeMethod = 'standard') {
+  const methodInfo = {
+    'standard': { name: 'Standard OAuth', icon: '🔐', description: 'Node.js googleapis library' },
+    'curl': { name: 'Curl Fallback', icon: '🛠️', description: 'System curl command (Amvera optimization)' }
+  };
+  
+  const method = methodInfo[exchangeMethod] || methodInfo['standard'];
+  
   return `
     <!DOCTYPE html>
     <html>
@@ -594,6 +892,13 @@ function generateSuccessPage(userName, userEmail, userPicture, credentialsSource
           border-radius: 10px;
           margin: 20px 0;
           border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+        .method-info {
+          background: rgba(255, 193, 7, 0.2);
+          padding: 15px;
+          border-radius: 10px;
+          margin: 20px 0;
+          border: 1px solid rgba(255, 193, 7, 0.3);
         }
         .features-grid {
           display: grid;
@@ -683,6 +988,12 @@ function generateSuccessPage(userName, userEmail, userPicture, credentialsSource
           <small>Credentials source: ${credentialsSource === 'database' ? 'User database' : 'Environment variables'}</small>
         </div>
         
+        <div class="method-info">
+          <strong>${method.icon} Authentication Method: ${method.name}</strong><br>
+          <small>${method.description}</small>
+          ${exchangeMethod === 'curl' ? '<br><small style="color: #ffd93d;">✨ Optimized for Amvera platform</small>' : ''}
+        </div>
+        
         <div style="color: #f0f0f0; font-size: 18px; line-height: 1.8; margin: 20px 0;">
           Your Google Workspace account is now fully integrated!
         </div>
@@ -724,7 +1035,8 @@ function generateSuccessPage(userName, userEmail, userPicture, credentialsSource
           ✓ OAuth 2.0 flow completed successfully<br>
           ✓ Access tokens securely stored<br>
           ✓ Integration status: Active<br>
-          ✓ Authentication method: ${credentialsSource === 'database' ? 'Database credentials' : 'Environment fallback'}
+          ✓ Authentication method: ${credentialsSource === 'database' ? 'Database credentials' : 'Environment fallback'}<br>
+          ✓ Exchange method: ${method.name}
         </div>
       </div>
       
