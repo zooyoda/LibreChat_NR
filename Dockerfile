@@ -14,6 +14,13 @@ RUN apk add --no-cache \
     ca-certificates \
     && rm -rf /var/cache/apk/*
 
+# ✅ СОЗДАНИЕ PERSISTENT ДИРЕКТОРИИ ДЛЯ ТОКЕНОВ
+RUN mkdir -p /data/workspace_tokens \
+    && mkdir -p /data/uploads \
+    && mkdir -p /data/images \
+    && mkdir -p /data/logs \
+    && mkdir -p /data/meilis_data
+
 # Копируем package.json для всех подпроектов
 COPY package*.json ./
 COPY client/package*.json ./client/
@@ -29,12 +36,14 @@ COPY mcp-google-workspace/package*.json ./mcp-google-workspace/
 # Копируем исходный код
 COPY . .
 
-# Создаем необходимые директории
+# Создаем необходимые директории (временные)
 RUN mkdir -p /app/config /app/logs /app/workspace \
     && mkdir -p /app/client/public/images /app/api/logs
 
-# Выставляем права и переключаемся на пользователя node
-RUN chown -R node:node /app
+# ✅ НАСТРОЙКА ПРАВ ДЛЯ PERSISTENT STORAGE
+RUN chown -R node:node /app \
+    && chown -R node:node /data
+
 USER node
 
 # Устанавливаем dev-зависимости для сборки всего проекта
@@ -85,7 +94,6 @@ RUN echo "=== Final MCP servers verification ===" \
     && ls -la mcp-context7/dist/index.js \
     && ls -la mcp-fetch/dist/index.js \
     && ls -la mcp-github-api/index.js \
-   # && ls -la mcp-google-workspace/dist/index.js \
     && echo "✅ All MCP servers verified"
 
 # Сборка основного приложения LibreChat
@@ -95,15 +103,24 @@ RUN npm run frontend \
 # Копирование конфигурации
 COPY librechat.yaml /app/librechat.yaml
 
-# Установка переменных окружения для production
+# ✅ ОБНОВЛЕННЫЕ ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
 ENV PORT=3080
 ENV WORKSPACE_BASE_PATH=/app/workspace
 ENV LOG_MODE=strict
 
-# Создание финальной структуры директорий
-RUN mkdir -p /app/uploads /app/images /app/meilis_data
+# ✅ PERSISTENT STORAGE ПУТИ
+ENV PERSISTENT_DATA_PATH=/data
+ENV GOOGLE_TOKENS_PATH=/data/workspace_tokens
+ENV UPLOADS_PATH=/data/uploads
+ENV IMAGES_PATH=/data/images
+ENV LOGS_PATH=/data/logs
+
+# ✅ СОЗДАНИЕ СИМЛИНКОВ ДЛЯ ОБРАТНОЙ СОВМЕСТИМОСТИ
+RUN ln -sf /data/uploads /app/uploads \
+    && ln -sf /data/images /app/images \
+    && ln -sf /data/workspace_tokens /app/workspace_tokens
 
 # Проверка здоровья контейнера
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
@@ -116,10 +133,13 @@ ENV NODE_TLS_REJECT_UNAUTHORIZED=0
 ENV GOOGLE_OAUTH_TIMEOUT=30000
 ENV HTTP_TIMEOUT=30000
 
-# Точка входа
+# ✅ ПРОВЕРКА PERSISTENT ДИРЕКТОРИЙ ПРИ СТАРТЕ
 CMD echo "=== Starting LibreChat ===" && \
     echo "Environment: $NODE_ENV" && \
     echo "Host: $HOST" && \
     echo "Port: $PORT" && \
+    echo "Persistent data path: $PERSISTENT_DATA_PATH" && \
+    echo "Google tokens path: $GOOGLE_TOKENS_PATH" && \
+    ls -la /data/ && \
     echo "Starting server..." && \
     node api/server/index.js
