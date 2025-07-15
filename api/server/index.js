@@ -138,6 +138,8 @@ const startServer = async () => {
   app.use('/api/memories', routes.memories);
   app.use('/api/tags', routes.tags);
   app.use('/api/mcp', routes.mcp);
+  app.use('/api', routes.testRouter);
+  app.use('/api', routes.debug);
 
   // ✅ Диагностические маршруты
   const debugRoutes = require('./routes/debug');
