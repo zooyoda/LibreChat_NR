@@ -22,8 +22,8 @@ Usage examples:
 
     // ✅ Сохраняем userId для работы с БД
     this.userId = fields.userId;
-    this.tokenPath = path.join(process.cwd(), 'workspace_tokens.json');
-    this.userTokenPath = path.join(process.cwd(), 'workspace_tokens', `user_${this.userId}_*.json`);
+    this.tokenPath = path.join('/data', 'workspace_tokens.json');
+    this.userTokenPath = path.join('/data', 'workspace_tokens', `user_${this.userId}_*.json`);
     this.redirectUri = 'https://nrlibre-neuralrunner.amvera.io/oauth/google/workspace/callback';
 
     // Временные значения из fields (могут быть placeholder)
