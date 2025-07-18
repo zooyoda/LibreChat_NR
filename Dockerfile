@@ -2,7 +2,7 @@ FROM node:20.19-alpine
 
 WORKDIR /app
 
-# Установка необходимых системных зависимостей с сетевыми утилитами
+# ✅ Установка системных зависимостей включая curl для health checks
 RUN apk add --no-cache \
     bash \
     curl \
@@ -16,18 +16,17 @@ RUN apk add --no-cache \
     iputils \
     && rm -rf /var/cache/apk/*
 
-# ✅ НАСТРОЙКА DNS ДЛЯ ЛУЧШЕГО СОЕДИНЕНИЯ С GOOGLE APIS
+# ✅ Настройка DNS для улучшения соединения с Google APIs
 RUN echo "nameserver 1.1.1.1" > /etc/resolv.conf && \
     echo "nameserver 8.8.8.8" >> /etc/resolv.conf && \
     echo "nameserver 8.8.4.4" >> /etc/resolv.conf
 
-# ✅ СОЗДАНИЕ PERSISTENT ДИРЕКТОРИИ ДЛЯ ТОКЕНОВ
+# ✅ ИСПРАВЛЕНО: Создание ТОЛЬКО persistent директорий для данных (БЕЗ /data/config)
 RUN mkdir -p /data/workspace_tokens \
     && mkdir -p /data/uploads \
     && mkdir -p /data/images \
     && mkdir -p /data/logs \
-    && mkdir -p /data/meilis_data \
-    && mkdir -p /data/config
+    && mkdir -p /data/meilis_data
 
 # Копируем package.json для всех подпроектов
 COPY package*.json ./
@@ -38,28 +37,29 @@ COPY mcp-telegram/package*.json ./mcp-telegram/
 COPY sequentialthinking-mcp/package*.json ./sequentialthinking-mcp/
 COPY mcp-context7/package*.json ./mcp-context7/
 COPY mcp-fetch/package*.json ./mcp-fetch/
-# Добавляем поддержку Google Workspace
 COPY mcp-google-workspace/package*.json ./mcp-google-workspace/
 
 # Копируем исходный код
 COPY . .
 
-# Создаем необходимые директории (временные)
+# Создаем рабочие директории
 RUN mkdir -p /app/config /app/logs /app/workspace \
     && mkdir -p /app/client/public/images /app/api/logs
 
-# ✅ НАСТРОЙКА ПРАВ ДЛЯ PERSISTENT STORAGE
+# ✅ Настройка прав
 RUN chown -R node:node /app \
     && chown -R node:node /data
 
 USER node
 
-# Устанавливаем dev-зависимости для сборки всего проекта
+# Установка зависимостей
 RUN npm ci --include=dev
 
-# Устанавливаем Google APIs в корневой проект с retry логикой
+# Установка Google APIs
 RUN npm install googleapis google-auth-library || \
     (echo "Retrying googleapis installation..." && sleep 5 && npm install googleapis google-auth-library)
+
+# ===== СБОРКА MCP СЕРВЕРОВ =====
 
 # MCP-GITHUB-API
 WORKDIR /app/mcp-github-api
@@ -88,7 +88,7 @@ RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
-# GOOGLE WORKSPACE - собираем TypeScript код для возможного использования
+# GOOGLE WORKSPACE
 WORKDIR /app/mcp-google-workspace
 RUN npm install
 RUN npm run build
@@ -97,84 +97,72 @@ RUN npm prune --omit=dev
 # Возвращаемся в корневой каталог
 WORKDIR /app
 
-# Финальная проверка всех MCP серверов
-RUN echo "=== Final MCP servers verification ===" \
+# Проверка MCP серверов
+RUN echo "=== MCP servers verification ===" \
     && ls -la sequentialthinking-mcp/dist/index.js \
     && ls -la mcp-context7/dist/index.js \
     && ls -la mcp-fetch/dist/index.js \
     && ls -la mcp-github-api/index.js \
     && echo "✅ All MCP servers verified"
 
-# Сборка основного приложения LibreChat
+# Сборка frontend
 RUN npm run frontend \
     && echo "✅ Frontend built successfully"
 
-# Копирование конфигурации
+# ✅ ИСПРАВЛЕНО: Копирование librechat.yaml в СТАНДАРТНОЕ место
 COPY librechat.yaml /app/librechat.yaml
 
-# ✅ ОБНОВЛЕННЫЕ ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ
+# ✅ ИСПРАВЛЕНО: Переменные окружения БЕЗ проблемной CONFIG_PATH
 ENV HOST=0.0.0.0
 ENV NODE_ENV=production
 ENV PORT=3080
 ENV WORKSPACE_BASE_PATH=/app/workspace
 ENV LOG_MODE=strict
 
-# ✅ PERSISTENT STORAGE ПУТИ
+# ✅ ТОЛЬКО специфичные переменные для persistent storage (БЕЗ CONFIG_PATH)
 ENV PERSISTENT_DATA_PATH=/data
 ENV GOOGLE_TOKENS_PATH=/data/workspace_tokens
 ENV UPLOADS_PATH=/data/uploads
 ENV IMAGES_PATH=/data/images
 ENV LOGS_PATH=/data/logs
-ENV CONFIG_PATH=/data/config
 
-# ✅ РАСШИРЕННЫЕ СЕТЕВЫЕ НАСТРОЙКИ ДЛЯ AMVERA
+# ✅ Сетевые настройки для Amvera
 ENV NODE_TLS_REJECT_UNAUTHORIZED=0
-ENV GOOGLE_OAUTH_TIMEOUT=90000
-ENV HTTP_TIMEOUT=90000
-ENV HTTPS_TIMEOUT=90000
+ENV GOOGLE_OAUTH_TIMEOUT=60000
+ENV HTTP_TIMEOUT=60000
+ENV HTTPS_TIMEOUT=60000
 ENV NODE_OPTIONS="--max-old-space-size=2048 --dns-result-order=ipv4first"
 
-# ✅ НАСТРОЙКИ ДЛЯ ОБХОДА PROXY ОГРАНИЧЕНИЙ
+# ✅ Настройки для обхода proxy ограничений
 ENV HTTP_PROXY=""
 ENV HTTPS_PROXY=""
 ENV NO_PROXY="localhost,127.0.0.1,oauth2.googleapis.com,*.googleapis.com"
 
-# ✅ CURL НАСТРОЙКИ ДЛЯ FALLBACK РЕШЕНИЯ
-ENV CURL_TIMEOUT=90
-ENV CURL_CONNECT_TIMEOUT=30
-ENV CURL_MAX_REDIRECTS=5
-
-# ✅ СОЗДАНИЕ СИМЛИНКОВ ДЛЯ ОБРАТНОЙ СОВМЕСТИМОСТИ
+# ✅ ИСПРАВЛЕНО: Правильное разделение RUN команд
 RUN ln -sf /data/uploads /app/uploads \
     && ln -sf /data/images /app/images \
-    && ln -sf /data/workspace_tokens /app/workspace_tokens \
-    && ln -sf /data/config /app/config_persistent
+    && ln -sf /data/workspace_tokens /app/workspace_tokens
 
-# ✅ ПРОВЕРКА СЕТЕВОГО ДОСТУПА ПРИ СБОРКЕ
+# ✅ ИСПРАВЛЕНО: Отдельная команда для network tests
 RUN echo "=== Network connectivity test ===" \
     && curl -I --connect-timeout 10 --max-time 30 https://www.google.com || echo "Google unreachable during build" \
     && curl -I --connect-timeout 10 --max-time 30 https://registry.npmjs.org || echo "NPM registry unreachable during build"
 
-# Проверка здоровья контейнера с улучшенной диагностикой
+# ✅ Health check с корректным curl
 HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 \
     CMD curl -f http://localhost:3080/api/health || \
         (echo "Health check failed" && curl -f http://localhost:3080/ || exit 1)
 
-# Экспорт только основного порта приложения
 EXPOSE 3080
 
-# ✅ УЛУЧШЕННАЯ ПРОВЕРКА PERSISTENT ДИРЕКТОРИЙ И СЕТЕВОЙ ДИАГНОСТИКИ ПРИ СТАРТЕ
-CMD echo "=== Starting LibreChat on Amvera ===" && \
+# ✅ ИСПРАВЛЕНО: Упрощенная CMD команда
+CMD echo "=== Starting LibreChat ===" && \
     echo "Environment: $NODE_ENV" && \
     echo "Host: $HOST" && \
     echo "Port: $PORT" && \
-    echo "Persistent data path: $PERSISTENT_DATA_PATH" && \
-    echo "Google tokens path: $GOOGLE_TOKENS_PATH" && \
-    echo "Node options: $NODE_OPTIONS" && \
-    echo "=== Persistent storage check ===" && \
+    echo "Config file: /app/librechat.yaml" && \
+    echo "Persistent data: $PERSISTENT_DATA_PATH" && \
+    echo "Google tokens: $GOOGLE_TOKENS_PATH" && \
     ls -la /data/ && \
-    echo "=== Testing network connectivity ===" && \
-    (curl -I --connect-timeout 5 --max-time 10 https://www.google.com || echo "Google unreachable at startup") && \
-    (curl -I --connect-timeout 5 --max-time 10 https://oauth2.googleapis.com/token || echo "Google OAuth endpoint unreachable") && \
-    echo "=== Starting LibreChat server ===" && \
+    echo "=== Starting server ===" && \
     node api/server/index.js
