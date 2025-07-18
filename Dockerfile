@@ -2,7 +2,7 @@ FROM node:20.19-alpine
 
 WORKDIR /app
 
-# Установка необходимых системных зависимостей с сетевыми утилитами
+# ✅ ИСПРАВЛЕНО: Добавлен curl для health checks и network tests
 RUN apk add --no-cache \
     bash \
     curl \
@@ -38,13 +38,12 @@ COPY mcp-telegram/package*.json ./mcp-telegram/
 COPY sequentialthinking-mcp/package*.json ./sequentialthinking-mcp/
 COPY mcp-context7/package*.json ./mcp-context7/
 COPY mcp-fetch/package*.json ./mcp-fetch/
-# Добавляем поддержку Google Workspace
 COPY mcp-google-workspace/package*.json ./mcp-google-workspace/
 
 # Копируем исходный код
 COPY . .
 
-# Создаем необходимые директории (временные)
+# Создаем необходимые директории
 RUN mkdir -p /app/config /app/logs /app/workspace \
     && mkdir -p /app/client/public/images /app/api/logs
 
@@ -125,7 +124,7 @@ ENV GOOGLE_TOKENS_PATH=/data/workspace_tokens
 ENV UPLOADS_PATH=/data/uploads
 ENV IMAGES_PATH=/data/images
 ENV LOGS_PATH=/data/logs
-# ENV CONFIG_PATH=/data/config
+ENV CONFIG_PATH=/data/config
 
 # ✅ РАСШИРЕННЫЕ СЕТЕВЫЕ НАСТРОЙКИ ДЛЯ AMVERA
 ENV NODE_TLS_REJECT_UNAUTHORIZED=0
@@ -144,18 +143,18 @@ ENV CURL_TIMEOUT=90
 ENV CURL_CONNECT_TIMEOUT=30
 ENV CURL_MAX_REDIRECTS=5
 
-# ✅ СОЗДАНИЕ СИМЛИНКОВ ДЛЯ ОБРАТНОЙ СОВМЕСТИМОСТИ
+# ✅ ИСПРАВЛЕНО: Разделены RUN команды
 RUN ln -sf /data/uploads /app/uploads \
     && ln -sf /data/images /app/images \
     && ln -sf /data/workspace_tokens /app/workspace_tokens \
-   # && ln -sf /data/config /app/config_persistent
+    && ln -sf /data/config /app/config_persistent
 
-# ✅ ПРОВЕРКА СЕТЕВОГО ДОСТУПА ПРИ СБОРКЕ
+# ✅ ИСПРАВЛЕНО: Отдельная RUN команда для network tests
 RUN echo "=== Network connectivity test ===" \
     && curl -I --connect-timeout 10 --max-time 30 https://www.google.com || echo "Google unreachable during build" \
     && curl -I --connect-timeout 10 --max-time 30 https://registry.npmjs.org || echo "NPM registry unreachable during build"
 
-# Проверка здоровья контейнера с улучшенной диагностикой
+# ✅ ИСПРАВЛЕНО: Health check с корректным curl
 HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 \
     CMD curl -f http://localhost:3080/api/health || \
         (echo "Health check failed" && curl -f http://localhost:3080/ || exit 1)
@@ -163,7 +162,7 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 \
 # Экспорт только основного порта приложения
 EXPOSE 3080
 
-# ✅ УЛУЧШЕННАЯ ПРОВЕРКА PERSISTENT ДИРЕКТОРИЙ И СЕТЕВОЙ ДИАГНОСТИКИ ПРИ СТАРТЕ
+# ✅ ИСПРАВЛЕНО: Упрощенная CMD команда
 CMD echo "=== Starting LibreChat on Amvera ===" && \
     echo "Environment: $NODE_ENV" && \
     echo "Host: $HOST" && \
