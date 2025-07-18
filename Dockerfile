@@ -125,7 +125,7 @@ ENV GOOGLE_TOKENS_PATH=/data/workspace_tokens
 ENV UPLOADS_PATH=/data/uploads
 ENV IMAGES_PATH=/data/images
 ENV LOGS_PATH=/data/logs
-ENV CONFIG_PATH=/data/config
+# ENV CONFIG_PATH=/data/config
 
 # ✅ РАСШИРЕННЫЕ СЕТЕВЫЕ НАСТРОЙКИ ДЛЯ AMVERA
 ENV NODE_TLS_REJECT_UNAUTHORIZED=0
@@ -148,7 +148,7 @@ ENV CURL_MAX_REDIRECTS=5
 RUN ln -sf /data/uploads /app/uploads \
     && ln -sf /data/images /app/images \
     && ln -sf /data/workspace_tokens /app/workspace_tokens \
-    && ln -sf /data/config /app/config_persistent
+   # && ln -sf /data/config /app/config_persistent
 
 # ✅ ПРОВЕРКА СЕТЕВОГО ДОСТУПА ПРИ СБОРКЕ
 RUN echo "=== Network connectivity test ===" \
