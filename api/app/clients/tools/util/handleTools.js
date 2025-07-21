@@ -1,4 +1,3 @@
-const { mcpToolPattern } = require('@librechat/api');
 const { logger } = require('@librechat/data-schemas');
 const { SerpAPI } = require('@langchain/community/tools/serpapi');
 const { Calculator } = require('@langchain/community/tools/calculator');
@@ -7,6 +6,9 @@ const { EnvVar, createCodeExecutionTool, createSearchTool } = require('@librecha
 const { Tools, EToolResources, loadWebSearchAuth, replaceSpecialVars } = require('librechat-data-provider');
 
 // ✅ ИСПРАВЛЕНО: Правильный импорт Google Workspace
+const { mcpToolPattern, loadWebSearchAuth } = require('@librechat/api');
+const { EnvVar, createCodeExecutionTool, createSearchTool } = require('@librechat/agents');
+const { Tools, EToolResources, replaceSpecialVars } = require('librechat-data-provider');
 const {
   availableTools,
   manifestToolMap,
@@ -280,10 +282,48 @@ const loadTools = async ({
           loadAuthValues,
           webSearchConfig,
         });
-        const { onSearchResults, onGetHighlights } = options?.[Tools.web_search] ?? {};
-        requestedTools[tool] = async () => {
-          toolContextMap[tool] = `# \`${tool}\`:
-
+        const codeApiKey = authValues[EnvVar.CODE_API_KEY];
+        const { files, toolContext } = await primeCodeFiles(
+          {
+            ...options,
+            agentId: agent?.id,
+          },
+          codeApiKey,
+        );
+        if (toolContext) {
+          toolContextMap[tool] = toolContext;
+        }
+        const CodeExecutionTool = createCodeExecutionTool({
+          user_id: user,
+          files,
+          ...authValues,
+        });
+        CodeExecutionTool.apiKey = codeApiKey;
+        return CodeExecutionTool;
+      };
+      continue;
+    } else if (tool === Tools.file_search) {
+      requestedTools[tool] = async () => {
+        const { files, toolContext } = await primeSearchFiles({
+          ...options,
+          agentId: agent?.id,
+        });
+        if (toolContext) {
+          toolContextMap[tool] = toolContext;
+        }
+        return createFileSearchTool({ req: options.req, files, entity_id: agent?.id });
+      };
+      continue;
+    } else if (tool === Tools.web_search) {
+      const webSearchConfig = options?.req?.app?.locals?.webSearch;
+      const result = await loadWebSearchAuth({
+        userId: user,
+        loadAuthValues,
+        webSearchConfig,
+      });
+      const { onSearchResults, onGetHighlights } = options?.[Tools.web_search] ?? {};
+      requestedTools[tool] = async () => {
+        toolContextMap[tool] = `# \`${tool}\`:
 Current Date & Time: ${replaceSpecialVars({ text: '{{iso_datetime}}' })}
 
 1. **Execute immediately without preface** when using \`${tool}\`.
