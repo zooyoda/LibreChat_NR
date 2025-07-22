@@ -189,11 +189,13 @@ CMD echo "=== Starting LibreChat ===" && \
     echo "Environment: $NODE_ENV" && \
     echo "Host: $HOST" && \
     echo "Port: $PORT" && \
-    echo "Config file: /app/librechat.yaml" && \
-    echo "Persistent data: $PERSISTENT_DATA_PATH" && \
-    echo "Google tokens: $GOOGLE_TOKENS_PATH" && \
-    echo "=== Directory structure check ===" && \
+    echo "=== Ensuring directories exist ===" && \
+    mkdir -p /data/uploads/temp /data/uploads/audio /data/uploads/speech /data/uploads/files /data/images /data/logs && \
+    chown -R node:node /data/uploads /data/images /data/logs 2>/dev/null || true && \
+    chmod -R 755 /data/uploads /data/images /data/logs 2>/dev/null || true && \
+    echo "=== Directory verification ===" && \
     ls -la /data/ && \
     ls -la /data/uploads/ && \
+    echo "✅ All directories ready" && \
     echo "=== Starting server ===" && \
     node api/server/index.js
