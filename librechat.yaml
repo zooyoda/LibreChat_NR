@@ -2250,6 +2250,26 @@ memory:
   tokenLimit: 4096
   messageWindowSize: 20
 
+# Web Search Configuration  
+webSearch:
+  # Search Provider Configuration
+  serperApiKey: "${SERPER_API_KEY}"
+  searchProvider: "serper"
+  
+  # Scraper Configuration
+  firecrawlApiKey: "${FIRECRAWL_API_KEY}"
+  firecrawlApiUrl: "${FIRECRAWL_API_URL}"  # Опционально
+  scraperType: "firecrawl"
+  
+  # Reranker Configuration  
+  jinaApiKey: "${JINA_API_KEY}"
+  rerankerType: "jina"
+  
+  # General Settings
+  scraperTimeout: 15000  # Увеличен с 7500 до 15000
+  safeSearch: 1
+
+
 mcpServers:
   github-api:
     type: stdio
