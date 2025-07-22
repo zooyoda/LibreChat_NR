@@ -3,12 +3,11 @@ const { SerpAPI } = require('@langchain/community/tools/serpapi');
 const { Calculator } = require('@langchain/community/tools/calculator');
 const { WordPressJWTAPI } = require('../');
 const { EnvVar, createCodeExecutionTool, createSearchTool } = require('@librechat/agents');
-const { Tools, EToolResources, loadWebSearchAuth, replaceSpecialVars } = require('librechat-data-provider');
-
-// ✅ ИСПРАВЛЕНО: Правильный импорт Google Workspace
-const { mcpToolPattern, loadWebSearchAuth } = require('@librechat/api');
-const { EnvVar, createCodeExecutionTool, createSearchTool } = require('@librechat/agents');
 const { Tools, EToolResources, replaceSpecialVars } = require('librechat-data-provider');
+
+// ✅ ИСПРАВЛЕНО: Убран дублированный импорт loadWebSearchAuth
+const { mcpToolPattern, loadWebSearchAuth } = require('@librechat/api');
+
 const {
   availableTools,
   manifestToolMap,
@@ -39,7 +38,7 @@ const { createMCPTool } = require('~/server/services/MCP');
  *
  * @param {Object} user The user object for whom to validate tool access.
  * @param {Array} tools An array of tool identifiers to validate. Defaults to an empty array.
- * @returns {Promise<Array>} A promise that resolves to an array of valid tool identifiers.
+ * @returns {Promise} A promise that resolves to an array of valid tool identifiers.
  */
 const validateTools = async (user, tools = []) => {
   try {
@@ -57,6 +56,7 @@ const validateTools = async (user, tools = []) => {
      */
     const validateCredentials = async (authField, toolName) => {
       const fields = authField.split('||');
+      
       for (const field of fields) {
         const adminAuth = process.env[field];
         if (adminAuth && adminAuth.length > 0) {
@@ -76,6 +76,7 @@ const validateTools = async (user, tools = []) => {
           return;
         }
       }
+
       validToolsSet.delete(toolName);
     };
 
@@ -83,6 +84,7 @@ const validateTools = async (user, tools = []) => {
       if (!tool.authConfig || tool.authConfig.length === 0) {
         continue;
       }
+
       for (const auth of tool.authConfig) {
         await validateCredentials(auth.authField, tool.pluginKey);
       }
@@ -124,7 +126,6 @@ const getAuthFields = (toolKey) => {
 };
 
 /**
- *
  * @param {object} object
  * @param {string} object.user
  * @param {Pick} [object.agent]
@@ -166,48 +167,57 @@ const loadTools = async ({
     // ✅ ДОБАВЛЕНО: Отладочное логирование для диагностики
     logger.info('[loadTools] Available toolConstructors:', Object.keys(toolConstructors));
     logger.info('[loadTools] GoogleWorkspace constructor type:', typeof GoogleWorkspace);
-    
+
     const customConstructors = {
       serpapi: async (_toolContextMap) => {
         const authFields = getAuthFields('serpapi');
         let envVar = authFields[0] ?? '';
         let apiKey = process.env[envVar];
+        
         if (!apiKey) {
           apiKey = await getUserPluginAuthValue(user, envVar);
         }
+
         return new SerpAPI(apiKey, {
           location: 'Austin,Texas,United States',
           hl: 'en',
           gl: 'us',
         });
       },
+
       youtube: async (_toolContextMap) => {
         const authFields = getAuthFields('youtube');
         const authValues = await loadAuthValues({ userId: user, authFields });
         return createYouTubeTools(authValues);
       },
+
       image_gen_oai: async (toolContextMap) => {
         const authFields = getAuthFields('image_gen_oai');
         const authValues = await loadAuthValues({ userId: user, authFields });
         const imageFiles = options.tool_resources?.[EToolResources.image_edit]?.files ?? [];
+        
         let toolContext = '';
         for (let i = 0; i < imageFiles.length; i++) {
           const file = imageFiles[i];
           if (!file) {
             continue;
           }
+
           if (i === 0) {
             toolContext =
               'Image files provided in this request (their image IDs listed in order of appearance) available for image editing:';
           }
+
           toolContext += `\n\t- ${file.file_id}`;
           if (i === imageFiles.length - 1) {
             toolContext += `\n\nInclude any you need in the \`image_ids\` array when calling \`${EToolResources.image_edit}_oai\`. You may also include previously referenced or generated image IDs.`;
           }
         }
+
         if (toolContext) {
           toolContextMap.image_edit_oai = toolContext;
         }
+
         return createOpenAIImageTools({
           ...authValues,
           isAgent: !!agent,
@@ -218,7 +228,6 @@ const loadTools = async ({
     };
 
     const requestedTools = {};
-
     if (functions === true) {
       toolConstructors.dalle = DALLE3;
     }
@@ -240,107 +249,86 @@ const loadTools = async ({
       serpapi: { location: 'Austin,Texas,United States', hl: 'en', gl: 'us' },
     };
 
-    /** @type {Record<string, string>} */
+    /** @type {Record} */
     const toolContextMap = {};
-
     const appTools = (await getCachedTools({ includeGlobal: true })) ?? {};
 
     for (const tool of tools) {
+      // ✅ ИСПРАВЛЕНО: Убрано дублирование кода execute_code
       if (tool === Tools.execute_code) {
         requestedTools[tool] = async () => {
           const authValues = await loadAuthValues({
             userId: user,
             authFields: [EnvVar.CODE_API_KEY],
           });
+          
           const codeApiKey = authValues[EnvVar.CODE_API_KEY];
-          const { files, toolContext } = await primeCodeFiles(options, codeApiKey);
+          const { files, toolContext } = await primeCodeFiles({
+            ...options,
+            agentId: agent?.id,
+          }, codeApiKey);
+
           if (toolContext) {
             toolContextMap[tool] = toolContext;
           }
+
           const CodeExecutionTool = createCodeExecutionTool({
             user_id: user,
             files,
             ...authValues,
           });
+          
           CodeExecutionTool.apiKey = codeApiKey;
           return CodeExecutionTool;
         };
         continue;
-      } else if (tool === Tools.file_search) {
+      }
+
+      // ✅ ИСПРАВЛЕНО: Убрано дублирование кода file_search
+      else if (tool === Tools.file_search) {
         requestedTools[tool] = async () => {
-          const { files, toolContext } = await primeSearchFiles(options);
+          const { files, toolContext } = await primeSearchFiles({
+            ...options,
+            agentId: agent?.id,
+          });
+
           if (toolContext) {
             toolContextMap[tool] = toolContext;
           }
-          return createFileSearchTool({ req: options.req, files, entity_id: agent?.id });
+
+          return createFileSearchTool({ 
+            req: options.req, 
+            files, 
+            entity_id: agent?.id 
+          });
         };
         continue;
-      } else if (tool === Tools.web_search) {
+      }
+
+      // ✅ ИСПРАВЛЕНО: Очищен код web_search
+      else if (tool === Tools.web_search) {
         const webSearchConfig = options?.req?.app?.locals?.webSearch;
         const result = await loadWebSearchAuth({
           userId: user,
           loadAuthValues,
           webSearchConfig,
         });
-        const codeApiKey = authValues[EnvVar.CODE_API_KEY];
-        const { files, toolContext } = await primeCodeFiles(
-          {
-            ...options,
-            agentId: agent?.id,
-          },
-          codeApiKey,
-        );
-        if (toolContext) {
-          toolContextMap[tool] = toolContext;
-        }
-        const CodeExecutionTool = createCodeExecutionTool({
-          user_id: user,
-          files,
-          ...authValues,
-        });
-        CodeExecutionTool.apiKey = codeApiKey;
-        return CodeExecutionTool;
-      };
-      continue;
-    } else if (tool === Tools.file_search) {
-      requestedTools[tool] = async () => {
-        const { files, toolContext } = await primeSearchFiles({
-          ...options,
-          agentId: agent?.id,
-        });
-        if (toolContext) {
-          toolContextMap[tool] = toolContext;
-        }
-        return createFileSearchTool({ req: options.req, files, entity_id: agent?.id });
-      };
-      continue;
-    } else if (tool === Tools.web_search) {
-      const webSearchConfig = options?.req?.app?.locals?.webSearch;
-      const result = await loadWebSearchAuth({
-        userId: user,
-        loadAuthValues,
-        webSearchConfig,
-      });
-      const { onSearchResults, onGetHighlights } = options?.[Tools.web_search] ?? {};
-      requestedTools[tool] = async () => {
-        toolContextMap[tool] = `# \`${tool}\`:
+
+        const { onSearchResults, onGetHighlights } = options?.[Tools.web_search] ?? {};
+        
+        requestedTools[tool] = async () => {
+          toolContextMap[tool] = `# \`${tool}\`:
 Current Date & Time: ${replaceSpecialVars({ text: '{{iso_datetime}}' })}
 
 1. **Execute immediately without preface** when using \`${tool}\`.
-
 2. **After the search, begin with a brief summary** that directly addresses the query without headers or explaining your process.
-
 3. **Structure your response clearly** using Markdown formatting (Level 2 headers for sections, lists for multiple points, tables for comparisons).
-
 4. **Cite sources properly** according to the citation anchor format, utilizing group anchors when appropriate.
-
 5. **Tailor your approach to the query type** (academic, news, coding, etc.) while maintaining an expert, journalistic, unbiased tone.
-
 6. **Provide comprehensive information** with specific details, examples, and as much relevant context as possible from search results.
-
 7. **Avoid moralizing language.**
-
 `.trim();
+
           return createSearchTool({
             ...result.authResult,
             onSearchResults,
@@ -349,7 +337,10 @@ Current Date & Time: ${replaceSpecialVars({ text: '{{iso_datetime}}' })}
           });
         };
         continue;
-      } else if (tool && appTools[tool] && mcpToolPattern.test(tool)) {
+      }
+
+      // MCP Tools handling
+      else if (tool && appTools[tool] && mcpToolPattern.test(tool)) {
         requestedTools[tool] = async () =>
           createMCPTool({
             req: options.req,
@@ -361,11 +352,13 @@ Current Date & Time: ${replaceSpecialVars({ text: '{{iso_datetime}}' })}
         continue;
       }
 
+      // Custom constructors
       if (customConstructors[tool]) {
         requestedTools[tool] = async () => customConstructors[tool](toolContextMap);
         continue;
       }
 
+      // Standard tool constructors
       if (toolConstructors[tool]) {
         // ✅ ИСПРАВЛЕНО: Правильное использование переменной toolOptions
         const toolSpecificOptions = toolOptions[tool] || {};
@@ -375,6 +368,7 @@ Current Date & Time: ${replaceSpecialVars({ text: '{{iso_datetime}}' })}
           toolConstructors[tool],
           toolSpecificOptions,
         );
+        
         requestedTools[tool] = toolInstance;
         continue;
       }
@@ -399,6 +393,7 @@ Current Date & Time: ${replaceSpecialVars({ text: '{{iso_datetime}}' })}
 
     const loadedTools = (await Promise.all(toolPromises)).flatMap((plugin) => plugin || []);
     return { loadedTools, toolContextMap };
+    
   } catch (error) {
     logger.error('[loadTools] There was an error loading tools', error);
     throw new Error(error);
