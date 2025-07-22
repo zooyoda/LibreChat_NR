@@ -158,6 +158,7 @@
     "@cfworker/json-schema": "^4.1.1",
     "@langchain/langgraph-checkpoint": "^0.0.18",
     "bson": "^6.10.4",
+    "busboy": "^1.6.0",
     "bytes": "^3.1.2",
     "compressible": "^2.0.18",
     "connect-redis": "^9.0.0",
