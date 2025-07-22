@@ -153,6 +153,8 @@
     ]
   },
   "dependencies": {
+    "@ariakit/core": "^0.4.15",
+    "@ariakit/react": "^0.4.17",
     "@cfworker/json-schema": "^4.1.1",
     "@langchain/langgraph-checkpoint": "^0.0.18",
     "decamelize": "^6.0.0",
