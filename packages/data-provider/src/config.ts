@@ -482,6 +482,12 @@ const termsOfServiceSchema = z.object({
 
 export type TTermsOfService = z.infer<typeof termsOfServiceSchema>;
 
+const mcpServersSchema = z.object({
+  placeholder: z.string().optional(),
+});
+
+export type TMcpServersConfig = z.infer<typeof mcpServersSchema>;
+
 export const intefaceSchema = z
   .object({
     privacyPolicy: z
@@ -492,6 +498,7 @@ export const intefaceSchema = z
       .optional(),
     termsOfService: termsOfServiceSchema.optional(),
     customWelcome: z.string().optional(),
+    mcpServers: mcpServersSchema.optional(),
     endpointsMenu: z.boolean().optional(),
     modelSelect: z.boolean().optional(),
     parameters: z.boolean().optional(),
@@ -503,6 +510,7 @@ export const intefaceSchema = z
     prompts: z.boolean().optional(),
     agents: z.boolean().optional(),
     temporaryChat: z.boolean().optional(),
+    temporaryChatRetention: z.number().min(1).max(8760).optional(),
     runCode: z.boolean().optional(),
     webSearch: z.boolean().optional(),
   })
@@ -600,12 +608,14 @@ export type TStartupConfig = {
       >;
     }
   >;
+  mcpPlaceholder?: string;
 };
 
 export enum OCRStrategy {
   MISTRAL_OCR = 'mistral_ocr',
   CUSTOM_OCR = 'custom_ocr',
   AZURE_MISTRAL_OCR = 'azure_mistral_ocr',
+  VERTEXAI_MISTRAL_OCR = 'vertexai_mistral_ocr',
 }
 
 export enum SearchCategories {
@@ -637,6 +647,8 @@ export enum SafeSearchTypes {
 
 export const webSearchSchema = z.object({
   serperApiKey: z.string().optional().default('${SERPER_API_KEY}'),
+  searxngInstanceUrl: z.string().optional().default('${SEARXNG_INSTANCE_URL}'),
+  searxngApiKey: z.string().optional().default('${SEARXNG_API_KEY}'),
   firecrawlApiKey: z.string().optional().default('${FIRECRAWL_API_KEY}'),
   firecrawlApiUrl: z.string().optional().default('${FIRECRAWL_API_URL}'),
   jinaApiKey: z.string().optional().default('${JINA_API_KEY}'),
@@ -646,6 +658,39 @@ export const webSearchSchema = z.object({
   rerankerType: z.nativeEnum(RerankerTypes).optional(),
   scraperTimeout: z.number().optional(),
   safeSearch: z.nativeEnum(SafeSearchTypes).default(SafeSearchTypes.MODERATE),
+  firecrawlOptions: z
+    .object({
+      formats: z.array(z.string()).optional(),
+      includeTags: z.array(z.string()).optional(),
+      excludeTags: z.array(z.string()).optional(),
+      headers: z.record(z.string()).optional(),
+      waitFor: z.number().optional(),
+      timeout: z.number().optional(),
+      maxAge: z.number().optional(),
+      mobile: z.boolean().optional(),
+      skipTlsVerification: z.boolean().optional(),
+      blockAds: z.boolean().optional(),
+      removeBase64Images: z.boolean().optional(),
+      parsePDF: z.boolean().optional(),
+      storeInCache: z.boolean().optional(),
+      zeroDataRetention: z.boolean().optional(),
+      location: z
+        .object({
+          country: z.string().optional(),
+          languages: z.array(z.string()).optional(),
+        })
+        .optional(),
+      onlyMainContent: z.boolean().optional(),
+      changeTrackingOptions: z
+        .object({
+          modes: z.array(z.string()).optional(),
+          schema: z.record(z.unknown()).optional(),
+          prompt: z.string().optional(),
+          tag: z.string().nullable().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export type TWebSearchConfig = z.infer<typeof webSearchSchema>;
@@ -940,19 +985,11 @@ export const initialModelsConfig: TModelsConfig = {
   [EModelEndpoint.bedrock]: defaultModels[EModelEndpoint.bedrock],
 };
 
-export const EndpointURLs: { [key in EModelEndpoint]: string } = {
-  [EModelEndpoint.openAI]: `/api/ask/${EModelEndpoint.openAI}`,
-  [EModelEndpoint.google]: `/api/ask/${EModelEndpoint.google}`,
-  [EModelEndpoint.custom]: `/api/ask/${EModelEndpoint.custom}`,
-  [EModelEndpoint.anthropic]: `/api/ask/${EModelEndpoint.anthropic}`,
-  [EModelEndpoint.gptPlugins]: `/api/ask/${EModelEndpoint.gptPlugins}`,
-  [EModelEndpoint.azureOpenAI]: `/api/ask/${EModelEndpoint.azureOpenAI}`,
-  [EModelEndpoint.chatGPTBrowser]: `/api/ask/${EModelEndpoint.chatGPTBrowser}`,
-  [EModelEndpoint.azureAssistants]: '/api/assistants/v1/chat',
+export const EndpointURLs = {
   [EModelEndpoint.assistants]: '/api/assistants/v2/chat',
+  [EModelEndpoint.azureAssistants]: '/api/assistants/v1/chat',
   [EModelEndpoint.agents]: `/api/${EModelEndpoint.agents}/chat`,
-  [EModelEndpoint.bedrock]: `/api/${EModelEndpoint.bedrock}/chat`,
-};
+} as const;
 
 export const modularEndpoints = new Set<EModelEndpoint | string>([
   EModelEndpoint.gptPlugins,
@@ -1060,10 +1097,12 @@ export enum InfiniteCollections {
  * Enum for time intervals
  */
 export enum Time {
+  ONE_DAY = 86400000,
   ONE_HOUR = 3600000,
   THIRTY_MINUTES = 1800000,
   TEN_MINUTES = 600000,
   FIVE_MINUTES = 300000,
+  THREE_MINUTES = 180000,
   TWO_MINUTES = 120000,
   ONE_MINUTE = 60000,
   THIRTY_SECONDS = 30000,
@@ -1163,6 +1202,14 @@ export enum CacheKeys {
    * key for open id exchanged tokens
    */
   OPENID_EXCHANGED_TOKENS = 'OPENID_EXCHANGED_TOKENS',
+  /**
+   * Key for OpenID session.
+   */
+  OPENID_SESSION = 'openid_session',
+  /**
+   * Key for SAML session.
+   */
+  SAML_SESSION = 'saml_session',
 }
 
 /**
@@ -1209,6 +1256,30 @@ export enum ViolationTypes {
    * Tool Call Limit Violation.
    */
   TOOL_CALL_LIMIT = 'tool_call_limit',
+  /**
+   * General violation (catch-all).
+   */
+  GENERAL = 'general',
+  /**
+   * Login attempt violations.
+   */
+  LOGINS = 'logins',
+  /**
+   * Concurrent request violations.
+   */
+  CONCURRENT = 'concurrent',
+  /**
+   * Non-browser access violations.
+   */
+  NON_BROWSER = 'non_browser',
+  /**
+   * Message limit violations.
+   */
+  MESSAGE_LIMIT = 'message_limit',
+  /**
+   * Registration violations.
+   */
+  REGISTRATIONS = 'registrations',
 }
 
 /**
@@ -1255,6 +1326,10 @@ export enum ErrorTypes {
    * Google provider returned an error
    */
   GOOGLE_ERROR = 'google_error',
+  /**
+   * Google provider does not allow custom tools with built-in tools
+   */
+  GOOGLE_TOOL_CONFLICT = 'google_tool_conflict',
   /**
    * Invalid Agent Provider (excluded by Admin)
    */
@@ -1377,7 +1452,7 @@ export enum TTSProviders {
 /** Enum for app-wide constants */
 export enum Constants {
   /** Key for the app's version. */
-  VERSION = 'v0.7.8',
+  VERSION = 'v0.7.9-rc1',
   /** Key for the Custom Config's version (librechat.yaml). */
   CONFIG_VERSION = '1.2.8',
   /** Standard value for the first message's `parentMessageId` value, to indicate no parent exists. */
@@ -1451,10 +1526,20 @@ export enum LocalStorageKeys {
   LAST_CODE_TOGGLE_ = 'LAST_CODE_TOGGLE_',
   /** Last checked toggle for Web Search per conversation ID */
   LAST_WEB_SEARCH_TOGGLE_ = 'LAST_WEB_SEARCH_TOGGLE_',
+  /** Last checked toggle for File Search per conversation ID */
+  LAST_FILE_SEARCH_TOGGLE_ = 'LAST_FILE_SEARCH_TOGGLE_',
+  /** Last checked toggle for Artifacts per conversation ID */
+  LAST_ARTIFACTS_TOGGLE_ = 'LAST_ARTIFACTS_TOGGLE_',
   /** Key for the last selected agent provider */
   LAST_AGENT_PROVIDER = 'lastAgentProvider',
   /** Key for the last selected agent model */
   LAST_AGENT_MODEL = 'lastAgentModel',
+  /** Pin state for MCP tools per conversation ID */
+  PIN_MCP_ = 'PIN_MCP_',
+  /** Pin state for Web Search per conversation ID */
+  PIN_WEB_SEARCH_ = 'PIN_WEB_SEARCH_',
+  /** Pin state for Code Interpreter per conversation ID */
+  PIN_CODE_INTERPRETER_ = 'PIN_CODE_INTERPRETER_',
 }
 
 export enum ForkOptions {

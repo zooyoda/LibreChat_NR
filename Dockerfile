@@ -1,5 +1,7 @@
 FROM node:20.19-alpine
 
+# v0.7.9-rc1
+
 WORKDIR /app
 
 # ✅ Установка системных зависимостей включая curl для health checks
@@ -21,9 +23,13 @@ RUN echo "nameserver 1.1.1.1" > /etc/resolv.conf && \
     echo "nameserver 8.8.8.8" >> /etc/resolv.conf && \
     echo "nameserver 8.8.4.4" >> /etc/resolv.conf
 
-# ✅ ИСПРАВЛЕНО: Создание ТОЛЬКО persistent директорий для данных (БЕЗ /data/config)
+# ✅ ИСПРАВЛЕНО: Создание ПОЛНОЙ структуры persistent директорий включая STT
 RUN mkdir -p /data/workspace_tokens \
     && mkdir -p /data/uploads \
+    && mkdir -p /data/uploads/temp \
+    && mkdir -p /data/uploads/audio \
+    && mkdir -p /data/uploads/speech \
+    && mkdir -p /data/uploads/files \
     && mkdir -p /data/images \
     && mkdir -p /data/logs \
     && mkdir -p /data/meilis_data
@@ -42,13 +48,20 @@ COPY mcp-google-workspace/package*.json ./mcp-google-workspace/
 # Копируем исходный код
 COPY . .
 
-# Создаем рабочие директории
+# ✅ ИСПРАВЛЕНО: Создаем рабочие директории с полной структурой для STT
 RUN mkdir -p /app/config /app/logs /app/workspace \
-    && mkdir -p /app/client/public/images /app/api/logs
+    && mkdir -p /app/client/public/images /app/api/logs \
+    && mkdir -p /app/uploads \
+    && mkdir -p /app/uploads/temp \
+    && mkdir -p /app/uploads/audio \
+    && mkdir -p /app/uploads/speech \
+    && mkdir -p /app/uploads/files
 
-# ✅ Настройка прав
+# ✅ ИСПРАВЛЕНО: Настройка прав ДО переключения на пользователя node
 RUN chown -R node:node /app \
-    && chown -R node:node /data
+    && chown -R node:node /data \
+    && chmod -R 755 /data/uploads \
+    && chmod -R 755 /app/uploads
 
 USER node
 
@@ -126,6 +139,11 @@ ENV UPLOADS_PATH=/data/uploads
 ENV IMAGES_PATH=/data/images
 ENV LOGS_PATH=/data/logs
 
+# ✅ ДОБАВЛЕНО: Переменные для STT системы
+ENV TEMP_UPLOADS_PATH=/data/uploads/temp
+ENV AUDIO_UPLOADS_PATH=/data/uploads/audio
+ENV SPEECH_UPLOADS_PATH=/data/uploads/speech
+
 # ✅ Сетевые настройки для Amvera
 ENV NODE_TLS_REJECT_UNAUTHORIZED=0
 ENV GOOGLE_OAUTH_TIMEOUT=60000
@@ -138,15 +156,26 @@ ENV HTTP_PROXY=""
 ENV HTTPS_PROXY=""
 ENV NO_PROXY="localhost,127.0.0.1,oauth2.googleapis.com,*.googleapis.com"
 
-# ✅ ИСПРАВЛЕНО: Правильное разделение RUN команд
+# ✅ ИСПРАВЛЕНО: Создание симлинков с полной структурой директорий
 RUN ln -sf /data/uploads /app/uploads \
     && ln -sf /data/images /app/images \
-    && ln -sf /data/workspace_tokens /app/workspace_tokens
+    && ln -sf /data/workspace_tokens /app/workspace_tokens \
+    && echo "=== Verifying symlinks and directories ===" \
+    && ls -la /app/uploads/ \
+    && ls -la /data/uploads/ \
+    && echo "✅ Directory structure verified"
 
 # ✅ ИСПРАВЛЕНО: Отдельная команда для network tests
 RUN echo "=== Network connectivity test ===" \
     && curl -I --connect-timeout 10 --max-time 30 https://www.google.com || echo "Google unreachable during build" \
     && curl -I --connect-timeout 10 --max-time 30 https://registry.npmjs.org || echo "NPM registry unreachable during build"
+
+# ✅ ДОБАВЛЕНО: Проверка готовности STT директорий
+RUN echo "=== STT Directory verification ===" \
+    && ls -la /data/uploads/temp || echo "Creating temp directory..." \
+    && mkdir -p /data/uploads/temp /data/uploads/audio /data/uploads/speech \
+    && ls -la /data/uploads/ \
+    && echo "✅ STT directories ready"
 
 # ✅ Health check с корректным curl
 HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 \
@@ -155,14 +184,18 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 \
 
 EXPOSE 3080
 
-# ✅ ИСПРАВЛЕНО: Упрощенная CMD команда
+# ✅ ИСПРАВЛЕНО: Упрощенная CMD команда с проверкой директорий
 CMD echo "=== Starting LibreChat ===" && \
     echo "Environment: $NODE_ENV" && \
     echo "Host: $HOST" && \
     echo "Port: $PORT" && \
-    echo "Config file: /app/librechat.yaml" && \
-    echo "Persistent data: $PERSISTENT_DATA_PATH" && \
-    echo "Google tokens: $GOOGLE_TOKENS_PATH" && \
+    echo "=== Ensuring directories exist ===" && \
+    mkdir -p /data/uploads/temp /data/uploads/audio /data/uploads/speech /data/uploads/files /data/images /data/logs && \
+    chown -R node:node /data/uploads /data/images /data/logs 2>/dev/null || true && \
+    chmod -R 755 /data/uploads /data/images /data/logs 2>/dev/null || true && \
+    echo "=== Directory verification ===" && \
     ls -la /data/ && \
+    ls -la /data/uploads/ && \
+    echo "✅ All directories ready" && \
     echo "=== Starting server ===" && \
     node api/server/index.js
